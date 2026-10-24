@@ -53,6 +53,11 @@ Lista pedida el 23-oct-2026. Se va tachando conforme se hace, cosa por cosa.
       «Ir a…»): tapa el tirón del primer cuadro (regenerar entorno de
       luz al cruzar a subterráneo, etc.) y se quita tras 2 cuadros
       dibujados (mínimo 320 ms), con salida suave
+- [x] Gente dentro de la cabina del conductor: los lugares de pie junto
+      al tubo exterior de las puertas de los extremos (|u| = 5.25) y los
+      lugares traseros de la fila para bajar caían tras el mamparo
+      (|x| > 12.90); ya no se generan, la fila se pega al mamparo y un
+      clamp final impide cruzar a la cabina aunque empujen
 - [x] En cabina: manejo automático (que conduzca solo y pare en estación)
 - [x] Palanca de acelerar/desacelerar con mouse
 

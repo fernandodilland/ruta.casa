@@ -1958,9 +1958,14 @@
        pasillo bajo el pasamanos (mano derecha arriba) */
     SIDE_DOORS.forEach(function (d) {
       [-1, 1].forEach(function (k) {
+        var u = d.u + k * 1.05;
+        /* El mamparo de cabina va en |u| = 4.85: el lugar junto al tubo
+           exterior de las puertas de los extremos caía en |u| = 5.25, es
+           decir DENTRO de la cabina, y a veces amanecía un pasajero ahí */
+        if ((cabEnd > 0 && u > 4.7) || (cabEnd < 0 && u < -4.7)) return;
         [1, -1].forEach(function (s) {
           trainSlots[CUR_TRAIN_ID].push({ type: 'pole', car: carSign, side: s, occ: null,
-            x: midX + d.u + k * 1.05, z: CUR_Z + s * 0.62, yaw: k > 0 ? Math.PI / 2 : -Math.PI / 2 });
+            x: midX + u, z: CUR_Z + s * 0.62, yaw: k > 0 ? Math.PI / 2 : -Math.PI / 2 });
         });
       });
     });
@@ -2016,7 +2021,9 @@
     SIDE_DOORS.forEach(function (d) {
       [1, -1].forEach(function (s) {
         [-0.82, 0.82].forEach(function (dx) {
-          var x = midX + d.u + dx, fY = BODY_Y + FLOOR_DY;
+          var u2 = d.u + dx;
+          if ((cabEnd > 0 && u2 > 4.85) || (cabEnd < 0 && u2 < -4.85)) return;   /* no cruza el mamparo */
+          var x = midX + u2, fY = BODY_Y + FLOOR_DY;
           tubeBetween(car, x, fY, CUR_Z + s * 0.94, x, BODY_Y + 1.98, CUR_Z + s * 0.94, 0.026, MAT.steel);
           tubeBetween(car, x, BODY_Y + 1.98, CUR_Z + s * 0.94, x, BODY_Y + 2.06, CUR_Z + s * 0.38, 0.026, MAT.steel);
         });
@@ -4282,7 +4289,8 @@
     var pts = [{ x: dLX, z: P.trainZ + P.ps * 0.5 }];
     a.slot = takeSlot(id, car, dLX);
     if (a.slot) { a.slot.occ = a; pts.push(slotApproach(a.slot, P.trainZ)); }   /* apartado desde ya */
-    else pts.push({ x: dLX + (Math.random() - 0.5) * 2, z: P.trainZ + (Math.random() - 0.5) * 0.4 });
+    else pts.push({ x: Math.max(-12.55, Math.min(12.55, dLX + (Math.random() - 0.5) * 2)),
+      z: P.trainZ + (Math.random() - 0.5) * 0.4 });   /* nunca tras el mamparo (±12.90) */
     go(a, pts, settle);
   }
   function takeSlot(id, car, nearX) {
@@ -4345,6 +4353,19 @@
   function sendToExitSpot(a, idx) {
     var P = platOfTrain(a.where), o = EXIT_SPOTS[Math.min(idx, EXIT_SPOTS.length - 1)];
     var x = DOOR_X[a.door] + o[0], z = P.trainZ + P.ps * o[1];
+    /* Las puertas de los extremos están a ±12.25 y el mamparo a ±12.90:
+       los lugares traseros de la fila (dx hasta ±2.5) caían DENTRO de la
+       cabina. Esos se pegan al mamparo, escalonados hacia el pasillo. */
+    var CAB_LIM = 12.55;
+    if (x > CAB_LIM || x < -CAB_LIM) {
+      var over = 0, lim = Math.min(idx, EXIT_SPOTS.length - 1);
+      for (var j = 0; j <= lim; j++) {
+        var ox = DOOR_X[a.door] + EXIT_SPOTS[j][0];
+        if (ox > CAB_LIM || ox < -CAB_LIM) over++;
+      }
+      x = x > 0 ? CAB_LIM : -CAB_LIM;
+      z = P.trainZ + P.ps * (0.12 - (over - 1) * 0.3);
+    }
     a.exitIdx = idx; a.state = 'toDoorIn';
     go(a, [{ x: x, z: z }], function () {
       a.state = 'exitWait';
@@ -4662,6 +4683,9 @@
       if (a.state !== 'alighted') {
         var zl = zLimits(a);
         if (zl) p.z = THREE.MathUtils.clamp(p.z, zl[0], zl[1]);
+        /* y dentro del tren, nadie cruza los mamparos de cabina (±12.90)
+           aunque la multitud empuje junto a las puertas de los extremos */
+        if (a.where === 1 || a.where === 2) p.x = THREE.MathUtils.clamp(p.x, -12.6, 12.6);
       }
     }
   }
