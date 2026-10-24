@@ -58,11 +58,12 @@ python3 -m http.server 8123 --bind 127.0.0.1
 
 | Acción | Cómo |
 | --- | --- |
-| Girar la cámara | Arrastrar |
+| Girar la cámara | Arrastrar, o **flechas del teclado** (suave, varias a la vez) |
 | Acercar / alejar | Rueda del ratón o pellizcar |
-| Desplazar la vista | Arrastrar con botón derecho |
+| Desplazar la vista | Arrastrar con botón derecho, o `Shift` + flechas |
 | Cambiar de vista | Botones inferiores: Andén, Frente, Lateral, Trasera, Interior, Cabina, Cenital, Aérea, Calle, Caminar, Andén L2, Viajar L2 y Corte |
 | Manejar el tren | Vista Cabina: `W/↑` acelera, `S/↓` reversa, `Espacio` frena, `O`/`C` puertas (o los botones del panel) |
+| Mirar en cabina | Arrastre, o `←`/`→` (en Viajar L2 también `↑`/`↓`) |
 | Caminar | Vista Caminar: `W A S D` / flechas y arrastre para mirar; «Ir a…» salta entre niveles |
 | Ajustes | ⚙ arriba a la derecha: techos/paredes, clima y luz |
 

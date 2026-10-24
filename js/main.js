@@ -3025,7 +3025,16 @@
   var walk = { active: false, pos: new THREE.Vector3(3.85, 9.25, 3.1), yaw: Math.PI, pitch: -0.04, fwdBtn: false };
   var cabLook = { yaw: 0, pitch: -0.06 };
   var keysAll = {};
-  window.addEventListener('keydown', function (e) { keysAll[e.code] = true; });
+  var keySmooth = { x: 0, y: 0 };   /* flechas: ejes suavizados (arranca/frena suave) */
+  function inFormField(el) {
+    return !!(el && (el.tagName === 'INPUT' || el.tagName === 'SELECT' || el.tagName === 'TEXTAREA'));
+  }
+  window.addEventListener('keydown', function (e) {
+    keysAll[e.code] = true;
+    /* Las flechas mueven la vista (sin desplazar la página); en selectores
+       y controles siguen haciendo lo suyo (cambiar escenario, opacidad…) */
+    if (e.code.indexOf('Arrow') === 0 && !inFormField(e.target)) e.preventDefault();
+  });
   window.addEventListener('keyup', function (e) { keysAll[e.code] = false; });
 
   function applyView(name) {
@@ -3035,6 +3044,7 @@
     /* Cambio limpio: se sueltan teclas y botones sostenidos de la vista
        anterior y la mirada de cabina/caminar empieza al frente */
     Object.keys(keysAll).forEach(function (k) { keysAll[k] = false; });
+    keySmooth.x = 0; keySmooth.y = 0;   /* sin arrastre de flechas al cambiar de vista */
     if (typeof keysDown !== 'undefined') Object.keys(keysDown).forEach(function (k) { keysDown[k] = false; });
     if (typeof drive !== 'undefined') { drive.throttle = 0; drive.brake = false; }
     walk.fwdBtn = false;
@@ -3128,6 +3138,49 @@
       camera.position.z = THREE.MathUtils.clamp(camera.position.z, ZC - L2_HALF + 0.4, ZC + L2_HALF - 0.4);
     } else if (camera.position.y < 0.7) camera.position.y = 0.7;
     camera.lookAt(camTarget);
+  }
+
+  /* Flechas del teclado: mueven la vista suavemente y varias a la vez
+     (diagonal incluida). En vistas orbitales giran igual que arrastrar;
+     con Shift desplazan el objetivo (como arrastrar con botón derecho).
+     En Cabina/Viajar L2 mueven la mirada; ojo: en Cabina ↑/↓ siguen
+     siendo tracción/reversa del conductor, así que ahí solo ←/→ miran.
+     En Caminar las flechas ya caminan (no se toca nada). Los ejes se
+     suavizan (arranque y frenado graduales, sin saltos por repetición). */
+  function updateArrowKeys(dt) {
+    if (walk.active) { keySmooth.x = 0; keySmooth.y = 0; return; }
+    var blocked = inFormField(document.activeElement);
+    var ix = blocked ? 0 : (keysAll.ArrowRight ? 1 : 0) - (keysAll.ArrowLeft ? 1 : 0);
+    var iy = blocked ? 0 : (keysAll.ArrowDown ? 1 : 0) - (keysAll.ArrowUp ? 1 : 0);
+    var il = Math.hypot(ix, iy);
+    if (il > 1) { ix /= il; iy /= il; }   /* diagonal a la misma velocidad */
+    var ease = Math.min(1, dt * 7);
+    keySmooth.x += (ix - keySmooth.x) * ease;
+    keySmooth.y += (iy - keySmooth.y) * ease;
+    if (Math.abs(keySmooth.x) < 0.002 && Math.abs(keySmooth.y) < 0.002) {
+      if (!ix && !iy) { keySmooth.x = 0; keySmooth.y = 0; }
+      return;
+    }
+    if (manualPending || l2Ride) {
+      cabLook.yaw = THREE.MathUtils.clamp(cabLook.yaw - keySmooth.x * 1.5 * dt, -1.25, 1.25);
+      if (!manualPending) {   /* en Cabina ↑/↓ son del conductor; en L2 miran */
+        cabLook.pitch = THREE.MathUtils.clamp(cabLook.pitch - keySmooth.y * 1.2 * dt, -0.55, 0.45);
+      }
+      updateCamera();
+      return;
+    }
+    if (keysAll.ShiftLeft || keysAll.ShiftRight) {
+      var right = new THREE.Vector3().setFromMatrixColumn(camera.matrix, 0);
+      var up = new THREE.Vector3().setFromMatrixColumn(camera.matrix, 1);
+      var pk = sph.radius * 0.9 * dt;
+      camTarget.addScaledVector(right, keySmooth.x * pk).addScaledVector(up, -keySmooth.y * pk);
+      camTarget.y = subteOrbit ? THREE.MathUtils.clamp(camTarget.y, N5_Y + 0.3, N5_TOP - 0.5)
+        : THREE.MathUtils.clamp(camTarget.y, zone.corte ? -11 : 0.5, 25 + LIFT);
+    } else {
+      sph.theta -= keySmooth.x * 1.35 * dt;   /* mismo sentido que arrastrar */
+      sph.phi -= keySmooth.y * 1.1 * dt;
+    }
+    updateCamera();
   }
 
   /* ---------- URL compartible: vista + cámara + ajustes ----------
@@ -4978,6 +5031,7 @@
     updatePantoSparks(dt);
     updateWalk(dt);
     if (drive.manual) updateCamera();
+    updateArrowKeys(dt);   /* flechas: girar/desplazar la vista (antes del sync de URL) */
     /* Cerro y sol acompañan la vista: el cerro está lejísimos y la sombra
        se calcula donde se está mirando (pasos de 4 m, sin parpadeo) */
     farBg.position.x = (drive.manual || drive.riding) ? sim.trainX : 0;
