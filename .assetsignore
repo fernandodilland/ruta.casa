@@ -1,6 +1,8 @@
 # Solo se publica el sitio (index.html, css/, js/, lib/, ruta/).
 # Notas de trabajo, configuración y artefactos quedan fuera.
 .wrangler/
+.git/
+.gitignore
 .claude/
 .github/
 docs/
