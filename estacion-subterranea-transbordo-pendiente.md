@@ -103,6 +103,8 @@ calle) → escaleras a N4 → escalera del andén que le toca en N5.
   te puedes sentar en un asiento libre y viajas sin fin; en cada llegada
   abre y puedes bajar al andén. Dentro del tren, lo de caminar se calcula
   en coordenadas del tren (va a lo largo de z), igual que en la Línea 1.
+  Cerca de una puerta abierta te acomoda hacia ella (no hay que atinarle
+  exacto). En la Línea 1 también se viaja sin fin en ambos sentidos.
 - **Gente de la Línea 2**: al abrir puertas bajan algunos (van por la
   escalera, el distribuidor y N3 a la calle) y suben los que esperaban
   cerca; el tren espera a que terminen. De la calle llega gente nueva a

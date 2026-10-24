@@ -3572,11 +3572,33 @@
         return Math.abs(z - inNow.z) <= 1.12 || atOpenDoor(x, inNow, z);
       };
       if (inside(n.x, n.z)) return (inNext || atOpenDoor(p.x, inNow, n.z)) ? n : p;
+      /* quieres salir y hay una puerta abierta cerca: te acomoda hacia ella */
+      if (Math.abs(n.z - inNow.z) > 1.12) {
+        var po = doorPull(p.x, inNow, n.z);
+        if (po !== null && Math.abs(po) > 0.01) return { x: p.x + THREE.MathUtils.clamp(po, -0.07, 0.07), z: p.z };
+      }
       if (inside(n.x, p.z)) return { x: n.x, z: p.z };   /* desliza junto a la pared */
       return p;
     }
-    if (inNext) return atOpenDoor(n.x, inNext, p.z) ? n : p;   /* sin puerta abierta el tren es un muro */
+    if (inNext) {
+      if (atOpenDoor(n.x, inNext, p.z)) return n;
+      /* empujas hacia el tren cerca de una puerta abierta: te lleva a ella */
+      var pi = doorPull(p.x, inNext, p.z);
+      if (pi !== null) return { x: p.x + THREE.MathUtils.clamp(pi, -0.07, 0.07), z: p.z };
+      return null;   /* sin puerta: el tren es un muro y resbalas a lo largo de él */
+    }
     return null;
+  }
+  /* Cuánto falta (a lo largo del tren) para la puerta abierta más cercana,
+     si está a menos de 1.3 m y del lado del andén; si no, null */
+  function doorPull(x, t, z) {
+    if (!t || t.door < 0.7 || (z - t.z) * t.side < 0) return null;
+    var best = null;
+    for (var i = 0; i < DOOR_U.length; i++) {
+      var d = t.tx + DOOR_U[i] - x;
+      if (Math.abs(d) <= 1.3 && (best === null || Math.abs(d) < Math.abs(best))) best = d;
+    }
+    return best;
   }
   /* Trenes de la Línea 2 en sus coordenadas (solo a la altura de su andén) */
   function l2TrainAtLocal(lx, lz) {
@@ -3854,6 +3876,24 @@
   }
   function arrivalV(t) { return t < RUN.tc ? RUN.v : Math.max(0, RUN.v - RUN.dec * (t - RUN.tc)); }
   function departX(t) { return t < RUN.ta ? RUN.acc * t * t / 2 : RUN.xa + RUN.v * (t - RUN.ta); }
+  /* Recorrido completo de una estación a la siguiente (dist m): acelera,
+     va a velocidad de línea y frena para parar justo en la marca */
+  function makeProfile(dist, v, acc, dec) {
+    var xa = v * v / (2 * acc), xd = v * v / (2 * dec), ta = v / acc, td = v / dec, tc = (dist - xa - xd) / v;
+    return { v: v, acc: acc, dec: dec, xa: xa, ta: ta, td: td, tc: tc, T: ta + tc + td };
+  }
+  function profDist(R, t) {
+    if (t < R.ta) return R.acc * t * t / 2;
+    if (t < R.ta + R.tc) return R.xa + R.v * (t - R.ta);
+    var u = Math.min(t - R.ta - R.tc, R.td);
+    return R.xa + R.v * R.tc + R.v * u - R.dec * u * u / 2;
+  }
+  function profSpeed(R, t) {
+    if (t < R.ta) return R.acc * t;
+    if (t < R.ta + R.tc) return R.v;
+    return Math.max(0, R.v - R.dec * (t - R.ta - R.tc));
+  }
+  var RIDE2 = makeProfile(TILE_LEN, RUN.v, RUN.acc, RUN.dec);
   var DOOR_T = 1.4, AWAY_T = 3, DWELL_MIN = 5, DWELL_MAX = 32;
   /* dir: sentido de marcha (+x a Exposición, −x a Talleres). base: desfase del
      tren contrario cuando el conductor recicla el tramo. */
@@ -3889,7 +3929,18 @@
         break;
       case 'closing':
         S.door = 1 - easeInOut(clamp01(S.t / DOOR_T));
-        if (S.t >= DOOR_T) { S.door = 0; enterCycle(S, 'departing'); }
+        /* vas a bordo del tren 2: no se va «fuera de escena», sigue a la
+           siguiente estación (hacia Talleres) sin fin */
+        if (S.t >= DOOR_T) { S.door = 0; enterCycle(S, S.id === 2 && playerRiding(2) ? 'rideRun' : 'departing'); }
+        break;
+      case 'rideRun':
+        S.trainX = S.dir * profDist(RIDE2, S.t) + S.shift;
+        S.speed = profSpeed(RIDE2, S.t); S.moveDir = S.dir;
+        if (S.trainX * S.dir > TILE_HALF) {   /* pasó al tramo siguiente: se recicla como la línea */
+          S.shift -= S.dir * TILE_LEN; S.trainX -= S.dir * TILE_LEN;
+          shiftCity(S.dir); repopulatePlatforms();
+        }
+        if (S.t >= RIDE2.T) { S.trainX = 0; S.speed = 0; enterCycle(S, 'opening'); }
         break;
       case 'departing':
         S.trainX = S.dir * departX(S.t); S.speed = Math.min(RUN.v, RUN.acc * S.t); S.moveDir = S.dir;
@@ -3901,6 +3952,7 @@
     S.state = next; S.t = 0;
     if (next === 'arriving') { S.door = 0; S.trainX = -S.dir * RUN.L; }
     if (next === 'dwell') S.quiet = 0;
+    if (next === 'rideRun') S.shift = 0;
     if (next === 'closing') abortBoarding(S.id);
     if (next === 'away') {
       S.base = 0; S.door = 0;
@@ -3922,6 +3974,16 @@
     if (key === lastStatus) return; lastStatus = key;
     statusTitle.textContent = title; statusText.textContent = text;
     statusDot.style.background = color;
+  }
+  /* Viajando a bordo del tren 2 (dirección Talleres) */
+  function ride2Status() {
+    var S = sim2;
+    if (S.state === 'rideRun') {
+      var left = Math.ceil(RIDE2.T - S.t);
+      setStatus('Viajando a bordo', (left < 14 ? 'Llegando a Cuauhtémoc' : 'Siguiente: Cuauhtémoc · ' + left + ' s') +
+        ' · ' + Math.round(S.speed * 3.6) + ' km/h', '#1b4f9c');
+    } else if (S.state === 'dwell' || S.state === 'opening') setStatus('Viajando a bordo', 'Cuauhtémoc · puertas abiertas · dirección Talleres', '#078a4c');
+    else setStatus('Viajando a bordo', 'Dirección Talleres', '#1b4f9c');
   }
   /* Estado de la Línea 2 (bajo tierra o viajando en ella) */
   function l2Status() {
@@ -4985,7 +5047,9 @@
       return;
     }
     stepCycle(sim, dt);
-    if (zone.under || l2Ride) l2Status(); else cycleStatus();
+    if (zone.under || l2Ride) l2Status();
+    else if (playerRiding(2)) ride2Status();
+    else cycleStatus();
     /* Balanceo leve solo en movimiento */
     var moving = (sim.state === 'arriving' || sim.state === 'departing');
     train.position.y = 0; train.rotation.x = moving ? Math.sin(elapsed * 2.2) * 0.0012 : 0;

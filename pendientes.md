@@ -236,6 +236,11 @@ Lista pedida el 23-oct-2026. Se va tachando conforme se hace, cosa por cosa.
 - [x] Arreglos: hueco en el terreno para la escalera de N3 a N4, vías sin
       parpadeo, esquinas de cabina sanas en el tren girado (los chaflanes
       usaban lookAt en coordenadas del mundo)
+- [x] Viaje sin fin a bordo también en el tren 2 de la Línea 1 (dirección
+      Talleres): antes se iba fuera de escena y brincaba al otro extremo
+- [x] Entrar y salir de los vagones caminando sin atinar exacto: cerca de
+      una puerta abierta te acomoda hacia ella y, sin puerta, resbalas a lo
+      largo del costado (Línea 1 y Línea 2, ambos sentidos)
 - [ ] Transbordo de gente N1 ↔ N5. Detalle en
       [estacion-subterranea-transbordo-pendiente.md](estacion-subterranea-transbordo-pendiente.md)
 
