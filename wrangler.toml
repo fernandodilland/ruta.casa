@@ -1,0 +1,17 @@
+# ruta.casa — sitio estático (Workers Static Assets, sin código de Worker)
+# Docs: https://developers.cloudflare.com/workers/static-assets/
+name = "ruta-casa"
+account_id = "bb03c2ccb60585dbe1718971714cffed"
+compatibility_date = "2026-10-24"
+workers_dev = true
+
+# El sitio vive en la raíz del proyecto (index.html, css/, js/, lib/, ruta/).
+# Lo que NO es público se excluye en .assetsignore (notas .md, .claude/, etc.).
+[assets]
+directory = "."
+
+# Dominio propio: Cloudflare crea el DNS y el certificado solo.
+# Requiere la zona ruta.casa activa en esta misma cuenta.
+[[routes]]
+pattern = "ruta.casa"
+custom_domain = true

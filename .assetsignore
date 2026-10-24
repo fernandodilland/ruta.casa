@@ -1,0 +1,13 @@
+# Solo se publica el sitio (index.html, css/, js/, lib/, ruta/).
+# Notas de trabajo, configuración y artefactos quedan fuera.
+.wrangler/
+.claude/
+.github/
+docs/
+visual-plan/
+node_modules/
+*.md
+LICENSE
+.DS_Store
+wrangler.toml
+.assetsignore

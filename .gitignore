@@ -1,0 +1,5 @@
+# Sistema y artefactos locales (no son parte del proyecto)
+.DS_Store
+.claude/
+.wrangler/
+node_modules/

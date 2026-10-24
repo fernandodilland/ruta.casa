@@ -1,0 +1,156 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Metrorrey MM-05 — Estación Cuauhtémoc · Modelo 3D</title>
+<meta name="description" content="Modelo 3D offline y detallado de un tren Bombardier MM-05 del Metrorrey, con interior completo y techos transparentes configurables, en la estación elevada Cuauhtémoc.">
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="css/style.css?v=32">
+</head>
+<body>
+<main id="app">
+  <canvas id="scene" aria-label="Modelo 3D de un tren del Metrorrey en la estación elevada Cuauhtémoc"></canvas>
+
+  <header class="panel brand">
+    <div class="mark" aria-hidden="true">M</div>
+    <div>
+      <h1>Metrorrey <a class="exit" href="ruta/index.html">Salir</a></h1>
+      <p>Estación Cuauhtémoc · Transbordo L1–L2<br>Tren Bombardier MM-05 · Monterrey, N. L.</p>
+    </div>
+  </header>
+
+  <section class="panel status" aria-live="polite">
+    <span id="statusDot" class="dot"></span>
+    <div>
+      <strong id="statusTitle">Próximo tren</strong>
+      <div id="statusText">Dirección Exposición</div>
+    </div>
+    <div class="status-btns">
+      <button type="button" id="btnPlay">Pausar</button>
+      <button type="button" id="btnRestart">Reiniciar recorrido</button>
+      <details class="roofs" id="settingsPanel">
+        <summary title="Techos transparentes y clima">⚙ Ajustes</summary>
+        <div class="roofs-body panel">
+        <strong>Techos y paredes</strong>
+        <label>Estación
+          <select id="stationRoofMode">
+            <option value="auto" selected>Auto (cerca / arriba)</option>
+            <option value="visible">Visible</option>
+            <option value="transparente">Transparente</option>
+            <option value="oculto">Oculto</option>
+          </select>
+        </label>
+        <label>Opacidad <span id="stationRoofVal">12 %</span>
+          <input type="range" id="stationRoofMin" min="0" max="70" step="1" value="12">
+        </label>
+        <label>Tren MM-05
+          <select id="trainRoofMode">
+            <option value="auto">Auto (cerca / arriba)</option>
+            <option value="visible" selected>Visible</option>
+            <option value="transparente">Transparente</option>
+            <option value="oculto">Oculto</option>
+          </select>
+        </label>
+        <label>Opacidad <span id="trainRoofVal">7 %</span>
+          <input type="range" id="trainRoofMin" min="0" max="70" step="1" value="7">
+        </label>
+        <p>Auto: al acercarte o subir la cámara se desvanecen techo y pared del tren más cercano.</p>
+        <strong class="roofs-sub">Escenario</strong>
+        <label>Clima y luz
+          <select id="scenarioSel">
+            <option value="mediodia">Soleado mediodía</option>
+            <option value="amanecer">Amaneciendo</option>
+            <option value="lluvia">Lluvia</option>
+            <option value="noche" selected>Noche</option>
+          </select>
+        </label>
+        <button type="button" id="btnScenarioRandom" class="roof-btn">Escenario aleatorio</button>
+        </div>
+      </details>
+    </div>
+  </section>
+
+  <nav class="panel views" aria-label="Vistas de cámara">
+    <span>Vista</span>
+    <button type="button" data-view="anden" class="active">Andén</button>
+    <button type="button" data-view="frente">Frente</button>
+    <button type="button" data-view="lateral">Lateral</button>
+    <button type="button" data-view="trasera">Trasera</button>
+    <button type="button" data-view="interior">Interior</button>
+    <button type="button" data-view="cabina">Cabina</button>
+    <button type="button" data-view="cenital">Cenital</button>
+    <button type="button" data-view="aerea">Aérea</button>
+    <button type="button" data-view="calle">Calle</button>
+    <button type="button" data-view="caminar">Caminar</button>
+    <span class="views-sep">Línea 2</span>
+    <button type="button" data-view="andenL2" title="Andén subterráneo de la Línea 2">Andén L2</button>
+    <button type="button" data-view="viajarL2" title="Viaja sin fin en la cabina de la Línea 2">Viajar L2</button>
+    <button type="button" data-view="corte" title="Corte: se quitan calle y suelo para ver los 5 niveles del transbordo">Corte</button>
+  </nav>
+
+
+  <section class="panel drive mini" id="drivePanel" hidden aria-label="Controles del conductor">
+    <div class="drive-head">
+      <strong>Cabina</strong>
+      <span id="driveSpeed">0 km/h</span>
+      <button type="button" id="btnDriveHide" title="Mostrar controles" aria-expanded="false">Controles ▴</button>
+    </div>
+    <label class="lever-row">Palanca
+      <input type="range" id="lever" min="-2" max="3" step="1" value="0">
+      <span class="lever-marks">REV · FRENO · 0 · 1 · 2 · 3</span>
+    </label>
+    <label class="ato-row" title="Para en cada estación, espera el abordaje y sigue. Cualquier mando lo desactiva."><input type="checkbox" id="atoCheck" checked> Manejo automático</label>
+    <div class="drive-btns">
+      <button type="button" id="btnAccel">▲ Acelerar<kbd>W</kbd></button>
+      <button type="button" id="btnBrake">■ Freno<kbd>Espacio</kbd></button>
+      <button type="button" id="btnReverse">▼ Reversa<kbd>S</kbd></button>
+      <button type="button" id="btnDoors">Abrir puertas (O)</button>
+    </div>
+    <p id="driveMsg" class="drive-msg">W/↑ acelera · S/↓ reversa · O/C puertas</p>
+    <p class="drive-note">Línea infinita: la siguiente estación se ve al fondo y cada parada tiene otra gente. Sin puertas cerradas no hay tracción. El espejo naranja a tu derecha refleja el andén. Sal con cualquier otra vista.</p>
+  </section>
+
+  <section class="panel drive walk-panel mini" id="walkPanel" hidden aria-label="Caminar en primera persona">
+    <div class="drive-head"><strong>Caminando</strong>
+      <select id="walkGoto" aria-label="Ir a otro nivel" title="Ir a otro nivel del transbordo">
+        <option value="">Ir a…</option>
+        <option value="n1a">Andén L1 · Exposición</option>
+        <option value="n1b">Andén L1 · Talleres</option>
+        <option value="n2">Conexión bajo el andén</option>
+        <option value="calle">Calle · salida sur</option>
+        <option value="n3">Edificio de transbordo</option>
+        <option value="n4">Distribuidor L2</option>
+        <option value="n5z">Andén L2 · Zaragoza</option>
+        <option value="n5s">Andén L2 · Sendero</option>
+      </select>
+      <button type="button" id="btnWalkHide" title="Mostrar controles" aria-expanded="false">▴</button></div>
+    <div class="drive-btns">
+      <button type="button" id="btnWalkFwd">▲ Avanzar (mantener)</button>
+    </div>
+    <p id="walkMsg" class="drive-msg">WASD camina · Shift corre · arrastra para mirar</p>
+    <p class="drive-note">Las escaleras de los extremos del andén bajan a la conexión; de ahí sales a la calle (sur o poniente) o por la pasarela al edificio de transbordo, que baja a la Línea 2 subterránea. «Ir a…» te lleva directo a cada nivel. Sube a cualquier tren (elevado o de la Línea 2) por una puerta abierta y viajas a bordo sin fin; acércate a un asiento libre para sentarte y W para pararte. Shift corre.</p>
+  </section>
+
+  <details class="panel help">
+    <summary title="Cómo moverte">?</summary>
+    <div class="help-body">
+    <strong>Cómo moverte</strong>
+    <ul>
+      <li>Arrastra para girar</li>
+      <li>Rueda o pellizca para acercar</li>
+      <li>Arrastra con botón derecho para desplazar</li>
+    </ul>
+    <p>El tren llega, deja bajar, sube la gente y sale; la gente entra y sale por las escaleras. Usa «Interior» para viajar dentro y «Cabina» para manejar sin fin.</p>
+    <p>Transbordo a la Línea 2 (subterránea): «Andén L2» la muestra, «Viajar L2» viaja sin fin en su cabina y «Corte» deja ver los 5 niveles. En «Caminar», «Ir a…» salta entre niveles.</p>
+    </div>
+  </details>
+
+  <div id="error" class="error" hidden></div>
+</main>
+
+<!-- Sin módulos ni CDN: funciona offline con doble clic (file://). -->
+<script src="lib/three.min.js"></script>
+<script src="js/main.js?v=47"></script>
+</body>
+</html>
