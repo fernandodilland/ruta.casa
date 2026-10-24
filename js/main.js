@@ -203,6 +203,15 @@
       m.visible = rainGlassWet > 0.01 && m.opacity > 0.015;
     });
   }
+  /* Parámetros de la URL (?vista=corte&escenario=noche&…): permiten copiar
+     el enlace exacto de lo que estás viendo. Se acepta también #… por si
+     el navegador no deja reescribir el ?… en file://. */
+  function parseUrlParams() {
+    var s = location.search || '';
+    if (s.length < 2 && location.hash.indexOf('=') > 0) s = '?' + location.hash.slice(1);
+    try { return new URLSearchParams(s); } catch (e) { return new URLSearchParams(); }
+  }
+  var URLP = parseUrlParams();
   var SCENARIOS = {
     mediodia: { bg: 0xcfe5f2, fog: [115, 260], sunC: 0xfff2d6, sunI: 1.35, sunP: [-28, 42, 26],
       hemiI: 0.85, hemiS: 0xeaf6ff, fillI: 0.3, exp: 1.05, night: 0, rain: false },
@@ -3009,6 +3018,7 @@
   VIEWS.calle.target[1] += LIFT;
   var camTarget = new THREE.Vector3();
   var sph = { radius: 30, theta: 0.6, phi: 1.1 }; /* theta acimut, phi polar */
+  var currentView = 'anden';   /* vista activa (para la URL compartible) */
   var followTrain = false;
   var manualPending = false; /* la vista Cabina activa el modo conductor */
   /* Primera persona: caminando (walk) y mirada libre dentro de cabina */
@@ -3020,6 +3030,7 @@
 
   function applyView(name) {
     var v = VIEWS[name]; if (!v) return;
+    currentView = name;
     var prevWalk = walk.active, prevCab = manualPending;
     /* Cambio limpio: se sueltan teclas y botones sostenidos de la vista
        anterior y la mirada de cabina/caminar empieza al frente */
@@ -3075,6 +3086,7 @@
     for (var i = 0; i < btns.length; i++) {
       btns[i].classList.toggle('active', btns[i].getAttribute('data-view') === name);
     }
+    maybeSyncUrl(true);   /* al tocar una vista, la URL se actualiza al momento */
   }
   function updateCamera() {
     if (walk.active) {
@@ -3116,6 +3128,110 @@
       camera.position.z = THREE.MathUtils.clamp(camera.position.z, ZC - L2_HALF + 0.4, ZC + L2_HALF - 0.4);
     } else if (camera.position.y < 0.7) camera.position.y = 0.7;
     camera.lookAt(camTarget);
+  }
+
+  /* ---------- URL compartible: vista + cámara + ajustes ----------
+     La barra de direcciones siempre refleja lo que estás viendo:
+       ?vista=corte&escenario=noche&estacion=auto&estacionOpacidad=12
+        &tren=visible&trenOpacidad=7&objetivo=x,y,z&distancia=42
+        &acimut=35&polar=62
+     En Caminar se guarda pos=x,y,z más yaw/pitch; en Cabina/Viajar L2,
+     yaw/pitch de la mirada. Al abrir ese enlace se restaura todo.
+     Se escribe con replaceState (sin recargar ni ensuciar el historial),
+     a lo más cada 600 ms mientras te mueves, y al instante al tocar
+     una vista o un ajuste. */
+  var lastUrlStr = '', lastUrlWrite = 0, urlRestoring = false;
+  function urlNum(n, d) { return String(Math.round(n * Math.pow(10, d)) / Math.pow(10, d)); }
+  function urlDeg(rad) { return urlNum(rad * 180 / Math.PI, 1); }
+  function selVal(id) { var el = document.getElementById(id); return el ? el.value : null; }
+  function buildUrlParams() {
+    var q = new URLSearchParams();
+    q.set('vista', currentView);
+    var esc = selVal('scenarioSel'); if (esc) q.set('escenario', esc);
+    var em = selVal('stationRoofMode'); if (em) q.set('estacion', em);
+    var eo = selVal('stationRoofMin'); if (eo !== null) q.set('estacionOpacidad', eo);
+    var tm = selVal('trainRoofMode'); if (tm) q.set('tren', tm);
+    var to = selVal('trainRoofMin'); if (to !== null) q.set('trenOpacidad', to);
+    if (walk.active) {
+      q.set('pos', [walk.pos.x, walk.pos.y, walk.pos.z].map(function (n) { return urlNum(n, 2); }).join(','));
+      q.set('yaw', urlDeg(walk.yaw)); q.set('pitch', urlDeg(walk.pitch));
+    } else if (manualPending || l2Ride) {
+      q.set('yaw', urlDeg(cabLook.yaw)); q.set('pitch', urlDeg(cabLook.pitch));
+    } else {
+      /* En Interior la cámara viaja con el tren: solo ángulos/distancia,
+         el objetivo se recalcula contra el tren al abrir el enlace. */
+      if (!followTrain) {
+        q.set('objetivo', [camTarget.x, camTarget.y, camTarget.z].map(function (n) { return urlNum(n, 2); }).join(','));
+      }
+      q.set('distancia', urlNum(sph.radius, 1));
+      q.set('acimut', urlDeg(sph.theta));
+      q.set('polar', urlDeg(sph.phi));
+    }
+    return q.toString().replace(/%2C/g, ',');   /* comas legibles al copiar */
+  }
+  function maybeSyncUrl(force) {
+    if (urlRestoring) return;
+    var s = buildUrlParams(); if (s === lastUrlStr) return;
+    var now = performance.now();
+    if (!force && now - lastUrlWrite < 600) return;
+    lastUrlStr = s; lastUrlWrite = now;
+    try { history.replaceState(null, '', '?' + s); }
+    catch (e) { try { history.replaceState(null, '', '#' + s); } catch (e2) { /* file:// muy estricto */ } }
+  }
+  function urlVec(name) {
+    var v = URLP.get(name); if (!v) return null;
+    var p = v.split(',').map(Number);
+    return p.length === 3 && p.every(function (n) { return isFinite(n); }) ? p : null;
+  }
+  function urlFloat(name) {
+    var v = parseFloat(URLP.get(name));
+    return isFinite(v) ? v : null;
+  }
+  function setSel(id, value, ev) {
+    var el = document.getElementById(id);
+    if (!el || value === null || value === undefined) return;
+    if (el.tagName === 'SELECT' && ![].some.call(el.options, function (o) { return o.value === value; })) return;
+    el.value = value;
+    el.dispatchEvent(new Event(ev || 'change', { bubbles: true }));
+  }
+  function restoreFromUrl() {
+    urlRestoring = true;
+    /* Ajustes: se fijan en los controles y sus propios eventos los aplican */
+    setSel('stationRoofMode', URLP.get('estacion'));
+    setSel('stationRoofMin', URLP.get('estacionOpacidad'), 'input');
+    setSel('trainRoofMode', URLP.get('tren'));
+    setSel('trainRoofMin', URLP.get('trenOpacidad'), 'input');
+    var sEl = document.getElementById('scenarioSel');   /* el escenario se aplica al arrancar */
+    if (sEl && SCENARIOS[URLP.get('escenario')]) sEl.value = URLP.get('escenario');
+    var vista = VIEWS[URLP.get('vista')] ? URLP.get('vista') : 'anden';
+    applyView(vista);
+    if (walk.active) {
+      var pos = urlVec('pos');
+      if (pos) {
+        walk.pos.set(pos[0], pos[1], pos[2]);
+        walk.ground = groundAt(pos[0], pos[2], pos[1] - EYE_H);
+        walk.inTrain = null; walk.seat = null;
+      }
+      var wy = urlFloat('yaw'), wp2 = urlFloat('pitch');
+      if (wy !== null) walk.yaw = wy * Math.PI / 180;
+      if (wp2 !== null) walk.pitch = wp2 * Math.PI / 180;
+      updateCamera();
+    } else if (manualPending || l2Ride) {
+      var cy = urlFloat('yaw'), cp = urlFloat('pitch');
+      if (cy !== null) cabLook.yaw = cy * Math.PI / 180;
+      if (cp !== null) cabLook.pitch = cp * Math.PI / 180;
+      updateCamera();
+    } else {
+      var obj = urlVec('objetivo');
+      if (obj && !followTrain) camTarget.set(obj[0], obj[1], obj[2]);
+      var rr = urlFloat('distancia'), th = urlFloat('acimut'), ph = urlFloat('polar');
+      if (rr !== null) sph.radius = rr;
+      if (th !== null) sph.theta = th * Math.PI / 180;
+      if (ph !== null) sph.phi = ph * Math.PI / 180;
+      if (obj || rr !== null || th !== null || ph !== null) updateCamera();
+    }
+    urlRestoring = false;
+    lastUrlStr = ''; maybeSyncUrl(true);
   }
 
   var pointers = {}, pinchDist = 0, panning = false;
@@ -3505,21 +3621,25 @@
     var labelEl = document.getElementById(labelId);
     if (!modeEl || !minEl) return;
     group.mode = modeEl.value;   /* el modo inicial es el que trae el selector */
-    modeEl.addEventListener('change', function () { group.mode = modeEl.value; });
+    modeEl.addEventListener('change', function () { group.mode = modeEl.value; maybeSyncUrl(true); });
     function syncMin() {
       group.min = minEl.value / 100;
       if (labelEl) labelEl.textContent = minEl.value + ' %';
+      maybeSyncUrl(false);
     }
-    minEl.addEventListener('input', syncMin); syncMin();
+    minEl.addEventListener('input', syncMin);
+    minEl.addEventListener('change', function () { maybeSyncUrl(true); });   /* al soltar, URL exacta */
+    syncMin();
   }
   wireRoof('stationRoofMode', 'stationRoofMin', 'stationRoofVal', stationRoofFade);
   wireRoof('trainRoofMode', 'trainRoofMin', 'trainRoofVal', trainRoofFade);
   var scenarioSelEl = document.getElementById('scenarioSel');
-  if (scenarioSelEl) scenarioSelEl.addEventListener('change', function () { setScenario(scenarioSelEl.value); });
+  if (scenarioSelEl) scenarioSelEl.addEventListener('change', function () { setScenario(scenarioSelEl.value); maybeSyncUrl(true); });
   var btnScenRnd = document.getElementById('btnScenarioRandom');
   if (btnScenRnd) btnScenRnd.addEventListener('click', function () {
     var names = Object.keys(SCENARIOS);
     setScenario(names[Math.floor(Math.random() * names.length)]);
+    maybeSyncUrl(true);
   });
   var btnWalkFwd = document.getElementById('btnWalkFwd');
   if (btnWalkFwd) {
@@ -3601,7 +3721,7 @@
     renderer.setSize(window.innerWidth, window.innerHeight);
   });
 
-  applyView('anden');
+  restoreFromUrl();   /* vista inicial: la de la URL (?vista=…) o Andén */
 
   /* ---------- Animación: llega → abre puertas → aborda → cierra → sale ---------- */
   var statusTitle = document.getElementById('statusTitle');
@@ -4786,8 +4906,10 @@
   });
   personMat.envMapIntensity = personSkinMat.envMapIntensity = 0.35;
   /* Al entrar por primera vez el escenario es siempre de noche (el
-     selector «Clima y luz» queda sincronizado en Noche). */
-  setScenario('noche');
+     selector «Clima y luz» queda sincronizado en Noche), salvo que la
+     URL compartida traiga otro (?escenario=lluvia, etc.). */
+  setScenario(SCENARIOS[URLP.get('escenario')] ? URLP.get('escenario') : 'noche');
+  maybeSyncUrl(true);
   resetStation();
   var clock = new THREE.Clock();
   var prevTrainX = sim.trainX, prevTrain2X = trainWX(2);
@@ -4867,6 +4989,7 @@
     updateRain(Math.min(rawDt, 0.25));
     updateRoofs(Math.min(rawDt, 0.25));
     updateRainGlass(Math.min(rawDt, 0.25));   /* tras los techos: manda su visible/depthWrite */
+    maybeSyncUrl(false);   /* la URL sigue a la cámara (a lo más cada 600 ms) */
     updateZone();
     if (zone.under && draw) renderer.shadowMap.needsUpdate = false;   /* sin sol bajo tierra */
     if (subte.visible) updateL2People(Math.min(rawDt, 0.1));

@@ -66,6 +66,36 @@ python3 -m http.server 8123 --bind 127.0.0.1
 | Caminar | Vista Caminar: `W A S D` / flechas y arrastre para mirar; «Ir a…» salta entre niveles |
 | Ajustes | ⚙ arriba a la derecha: techos/paredes, clima y luz |
 
+## 🔗 Enlaces directos (parámetros en la URL)
+
+La barra de direcciones **siempre refleja lo que estás viendo**, así que
+puedes copiar la URL y compartir la vista exacta. Al abrir ese enlace se
+restaura todo: vista, cámara y ajustes.
+
+Ejemplo:
+
+```
+https://ruta.casa/?vista=corte&escenario=noche&estacion=auto&estacionOpacidad=12&tren=visible&trenOpacidad=7&objetivo=34,-2,14&distancia=55&acimut=35&polar=55
+```
+
+| Parámetro | Qué es | Valores |
+| --- | --- | --- |
+| `vista` | Vista activa | `anden`, `frente`, `lateral`, `trasera`, `interior`, `cabina`, `cenital`, `aerea`, `calle`, `caminar`, `andenL2`, `viajarL2`, `corte` |
+| `escenario` | Clima y luz | `mediodia`, `amanecer`, `lluvia`, `noche` |
+| `estacion` / `estacionOpacidad` | Techo de la estación y su opacidad | `auto`, `visible`, `transparente`, `oculto` / `0`–`70` |
+| `tren` / `trenOpacidad` | Techo y paredes del tren MM-05 | igual que arriba |
+| `objetivo` | Punto al que mira la cámara (`x,y,z`) | vistas orbitales |
+| `distancia` | Zoom: distancia al objetivo en metros | vistas orbitales |
+| `acimut` / `polar` | Ángulos de la cámara en grados | vistas orbitales |
+| `pos` | Tu posición (`x,y,z`) | solo en `caminar` |
+| `yaw` / `pitch` | Hacia dónde miras, en grados | `caminar`, `cabina`, `viajarL2` |
+
+Detalles: en **Interior** la cámara viaja con el tren, así que solo se
+guardan distancia y ángulos (el objetivo se recalcula al abrir el
+enlace). La URL se actualiza al instante al tocar una vista o un ajuste,
+y mientras mueves la cámara a lo más cada 600 ms, sin recargar la página
+ni llenar el historial. También funciona abriendo el archivo local.
+
 ## Despliegue (Cloudflare Workers Static Assets)
 
 El sitio se publica en [ruta.casa](https://ruta.casa) como *static

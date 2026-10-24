@@ -33,6 +33,10 @@ Lista pedida el 23-oct-2026. Se va tachando conforme se hace, cosa por cosa.
 - [x] Al entrar por primera vez el escenario es siempre Noche (sustituye
       al azar anterior); Tren MM-05 en «Visible» y Estación en
       «Auto (cerca / arriba)»
+- [x] URL compartible: la dirección siempre trae vista, cámara
+      (objetivo/distancia/acimut/polar, o pos+yaw/pitch en primera
+      persona) y ajustes completos (escenario, estación/tren y
+      opacidades); al abrir el enlace se restaura todo igual
 - [x] Gotas de lluvia en los vidrios por fuera (parabrisas, ventanas y
       puertas): microgotas quietas y gotas que resbalan con estela; se
       mojan al llover y se secan poco a poco al cambiar de escenario
