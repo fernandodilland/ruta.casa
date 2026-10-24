@@ -6,11 +6,21 @@
 <title>Metrorrey MM-05 — Estación Cuauhtémoc · Modelo 3D</title>
 <meta name="description" content="Modelo 3D offline y detallado de un tren Bombardier MM-05 del Metrorrey, con interior completo y techos transparentes configurables, en la estación elevada Cuauhtémoc.">
 <link rel="icon" href="data:,">
-<link rel="stylesheet" href="css/style.css?v=32">
+<link rel="stylesheet" href="css/style.css?v=33">
 </head>
 <body>
 <main id="app">
   <canvas id="scene" aria-label="Modelo 3D de un tren del Metrorrey en la estación elevada Cuauhtémoc"></canvas>
+
+  <!-- Cortina de carga: tapa el tirón del primer cuadro al cambiar de vista -->
+  <div id="viewLoader" role="status" aria-live="polite">
+    <div class="loader-box">
+      <div class="mark loader-mark" aria-hidden="true">M</div>
+      <strong id="viewLoaderText">Cargando…</strong>
+      <div class="loader-bar" aria-hidden="true"><i></i></div>
+      <span class="loader-hint">ruta.casa · Metrorrey 3D</span>
+    </div>
+  </div>
 
   <header class="panel brand">
     <div class="mark" aria-hidden="true">M</div>
@@ -152,6 +162,6 @@
 
 <!-- Sin módulos ni CDN: funciona offline con doble clic (file://). -->
 <script src="lib/three.min.js"></script>
-<script src="js/main.js?v=49"></script>
+<script src="js/main.js?v=50"></script>
 </body>
 </html>

@@ -49,6 +49,10 @@ Lista pedida el 23-oct-2026. Se va tachando conforme se hace, cosa por cosa.
 - [x] Flechas del teclado en las vistas: giran suave (varias a la vez,
       con arranque/frenado gradual), con Shift desplazan; en Cabina
       ←/→ mueven la mirada y ↑/↓ siguen siendo del conductor
+- [x] Cortina de carga al cambiar de vista (y al saltar de nivel con
+      «Ir a…»): tapa el tirón del primer cuadro (regenerar entorno de
+      luz al cruzar a subterráneo, etc.) y se quita tras 2 cuadros
+      dibujados (mínimo 320 ms), con salida suave
 - [x] En cabina: manejo automático (que conduzca solo y pare en estación)
 - [x] Palanca de acelerar/desacelerar con mouse
 

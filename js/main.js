@@ -7,8 +7,46 @@
 
   var errorBox = document.getElementById('error');
   function showError(msg) {
+    var vl = document.getElementById('viewLoader');
+    if (vl) vl.hidden = true;   /* que el error no quede tras la cortina de carga */
     errorBox.hidden = false;
     errorBox.textContent = 'No se pudo mostrar el modelo 3D. ' + msg;
+  }
+
+  /* ---------- Cortina de carga al cambiar de vista ----------
+     Cambiar de vista es casi instantáneo, pero el primer cuadro nuevo
+     puede trabarse un instante (p. ej. al cruzar a la zona subterránea se
+     regenera el entorno de luz y cambia qué se dibuja). La cortina se
+     muestra en el clic —el navegador la pinta antes del cuadro pesado— y
+     se quita cuando ya se dibujaron 2 cuadros de la vista nueva y pasaron
+     al menos 320 ms, con una salida suave. La animación es CSS, así que
+     sigue viva aunque el cuadro pesado ocupe el hilo principal. */
+  var viewLoader = document.getElementById('viewLoader');
+  var viewLoaderText = document.getElementById('viewLoaderText');
+  var loaderFrames = 2, loaderShownAt = performance.now(), loaderHideTimer = 0;
+  function showViewLoader(label) {
+    if (!viewLoader) return;
+    if (label && viewLoaderText) viewLoaderText.textContent = label;
+    clearTimeout(loaderHideTimer);
+    viewLoader.classList.remove('saliendo');
+    viewLoader.hidden = false;
+    loaderFrames = 2;
+    loaderShownAt = performance.now();
+  }
+  function tickViewLoader() {   /* tras cada cuadro dibujado */
+    if (!viewLoader || viewLoader.hidden || loaderFrames < 0) return;
+    if (loaderFrames > 0) { loaderFrames--; return; }
+    if (performance.now() - loaderShownAt < 320) return;
+    loaderFrames = -1;
+    viewLoader.classList.add('saliendo');
+    loaderHideTimer = setTimeout(function () {
+      viewLoader.hidden = true;
+      viewLoader.classList.remove('saliendo');
+    }, 260);
+  }
+  function viewLabelOf(name) {
+    var b = document.querySelector('[data-view="' + name + '"]');
+    return b ? b.textContent.trim() : name;
   }
   window.addEventListener('error', function (e) { showError(e.message || ''); });
 
@@ -3040,6 +3078,7 @@
   function applyView(name) {
     var v = VIEWS[name]; if (!v) return;
     currentView = name;
+    showViewLoader('Cargando vista ' + viewLabelOf(name) + '…');
     var prevWalk = walk.active, prevCab = manualPending;
     /* Cambio limpio: se sueltan teclas y botones sostenidos de la vista
        anterior y la mirada de cabina/caminar empieza al frente */
@@ -3641,8 +3680,10 @@
   var walkGotoEl = document.getElementById('walkGoto');
   if (walkGotoEl) walkGotoEl.addEventListener('change', function () {
     var g = WALK_GOTO[walkGotoEl.value];
+    var destino = walkGotoEl.selectedIndex >= 0 ? walkGotoEl.options[walkGotoEl.selectedIndex].text : '';
     walkGotoEl.value = ''; walkGotoEl.blur();   /* las flechas vuelven a caminar */
     if (!g || !walk.active) return;
+    showViewLoader('Yendo a ' + destino + '…');   /* el salto de nivel también traba un cuadro */
     if (walk.seat) { if (walk.seat.c.slot.occ === PLAYER_OCC) walk.seat.c.slot.occ = null; walk.seat = null; }
     walk.pos.set(g[0], g[1] + EYE_H, g[2]); walk.ground = g[1]; walk.inTrain = null;
     walk.yaw = g[3]; walk.pitch = -0.04;
@@ -5049,6 +5090,6 @@
     if (subte.visible) updateL2People(Math.min(rawDt, 0.1));
     updateMirrors();
     updateClock();
-    if (draw) renderer.render(scene, camera);
+    if (draw) { renderer.render(scene, camera); tickViewLoader(); }
   }
 })();
