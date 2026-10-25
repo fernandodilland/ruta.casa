@@ -55,6 +55,10 @@ body{font-family:Avenir Next,Avenir,Helvetica Neue,Helvetica,sans-serif;color:va
 .drive-btns button{font:inherit;font-size:13px;border:1px solid #4a6076;background:#26384a;color:#eef3f6;padding:8px 10px;border-radius:4px;cursor:pointer;touch-action:none;user-select:none}
 .drive-btns button:hover{border-color:#ffd34d}
 .drive-btns button.held{background:#1e4fa3;border-color:#ffd34d}
+.drive-btns button.emerg{background:#7a1c12;border-color:#d8432a}
+.drive-btns button.emerg.on{background:#d8432a;border-color:#ffd34d;animation:emergBlink .5s steps(2) infinite}
+@keyframes emergBlink{50%{background:#7a1c12}}
+@media (prefers-reduced-motion:reduce){.drive-btns button.emerg.on{animation:none}}
 .drive-btns kbd{margin-left:6px;font-size:10px;opacity:.75;border:1px solid #4a6076;border-radius:3px;padding:1px 4px}
 .brand h1 .exit{font-size:12px;font-weight:700;vertical-align:middle;margin-left:8px;padding:4px 9px;border:1px solid var(--line);border-radius:4px;color:var(--ink);text-decoration:none;background:#fff}
 .brand h1 .exit:hover{border-color:var(--green)}

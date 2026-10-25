@@ -3069,6 +3069,27 @@
   /* Primera persona: caminando (walk) y mirada libre dentro de cabina */
   var walk = { active: false, pos: new THREE.Vector3(3.85, 9.25, 3.1), yaw: Math.PI, pitch: -0.04, fwdBtn: false };
   var cabLook = { yaw: 0, pitch: -0.06 };
+  /* En Cabina puedes voltear hasta atrás y ver el salón por la ventana del
+     mamparo (la gente en un frenado); en Viajar L2 la mirada va al frente */
+  function cabYawLim() { return manualPending ? Math.PI : 1.25; }
+  /* Inercia a bordo (trenes 1 y 2): frenar o acelerar empuja a quien va
+     dentro. Un resorte amortiguado sigue el cambio de aceleración (el
+     tirón) y un poco de la sostenida: al entrar la emergencia todos se van
+     hacia adelante y al detenerse hay un rebote hacia atrás.
+     x = empuje en m/s² hacia +X del mundo. */
+  var inertia = { 1: { v: null, slow: 0, x: 0, vx: 0, g: 1 }, 2: { v: null, slow: 0, x: 0, vx: 0, g: 1 } };
+  /* gain: qué tan fuerte se siente (la emergencia lo baja según la
+     velocidad); baja al instante y vuelve a 1 con suavidad, sin tirón */
+  function stepInertia(I, vel, dt, gain) {
+    var g = gain === undefined ? 1 : gain;
+    I.g = g < I.g ? g : I.g + (g - I.g) * (1 - Math.exp(-dt / 1.2));
+    if (I.v === null || Math.abs(vel - I.v) > 2) { I.v = vel; return; }   /* salto: cambio de modo o reciclaje */
+    var acc = THREE.MathUtils.clamp((vel - I.v) / dt, -2.5, 2.5); I.v = vel;
+    I.slow += (acc - I.slow) * (1 - Math.exp(-dt / 1.1));
+    var tgt = (-(acc - I.slow) - 0.35 * acc) * I.g, w = 6.5, zeta = 0.32;
+    I.vx += (w * w * (tgt - I.x) - 2 * zeta * w * I.vx) * dt;
+    I.x += I.vx * dt;
+  }
   var keysAll = {};
   var keySmooth = { x: 0, y: 0 };   /* flechas: ejes suavizados (arranca/frena suave) */
   function inFormField(el) {
@@ -3153,10 +3174,17 @@
       return;
     }
     if (manualPending && typeof sim !== 'undefined' && sim) {
-      /* Cabina en primera persona: fijo en el asiento, solo gira la mirada */
-      camera.position.set(sim.trainX + 14.55, BODY_Y + 1.98, TRAIN_Z - 0.3);
-      var cd = new THREE.Vector3(Math.cos(cabLook.yaw) * Math.cos(cabLook.pitch),
-        Math.sin(cabLook.pitch), -Math.sin(cabLook.yaw) * Math.cos(cabLook.pitch));
+      /* Cabina en primera persona: fijo en el asiento, solo gira la mirada.
+         La inercia lleva la cabeza adelante y un poco abajo al frenar (atrás
+         al arrancar); en emergencia además vibra (antideslizamiento). */
+      var hx = inertia[1].x, pt = cabLook.pitch - hx * 0.05 * Math.cos(cabLook.yaw);   /* volteado: la cabeza va hacia atrás */
+      if (typeof drive !== 'undefined' && drive.emerg && Math.abs(drive.speed) > 0.3) {
+        var et = clock.elapsedTime, ek = Math.min(1, Math.abs(drive.speed) / 16.7);   /* la vibración crece con la velocidad (plena a 60 km/h) */
+        pt += (Math.sin(et * 47) * 0.0035 + Math.sin(et * 29.3) * 0.0025) * ek;
+      }
+      camera.position.set(sim.trainX + 14.55 + hx * 0.05, BODY_Y + 1.98 - Math.abs(hx) * 0.01, TRAIN_Z - 0.3);
+      var cd = new THREE.Vector3(Math.cos(cabLook.yaw) * Math.cos(pt),
+        Math.sin(pt), -Math.sin(cabLook.yaw) * Math.cos(pt));
       camera.lookAt(camera.position.clone().add(cd));
       return;
     }
@@ -3208,7 +3236,7 @@
       return;
     }
     if (manualPending || l2Ride) {
-      cabLook.yaw = THREE.MathUtils.clamp(cabLook.yaw - keySmooth.x * 1.5 * dt, -1.25, 1.25);
+      cabLook.yaw = THREE.MathUtils.clamp(cabLook.yaw - keySmooth.x * 1.5 * dt, -cabYawLim(), cabYawLim());
       if (!manualPending) {   /* en Cabina ↑/↓ son del conductor; en L2 miran */
         cabLook.pitch = THREE.MathUtils.clamp(cabLook.pitch - keySmooth.y * 1.2 * dt, -0.55, 0.45);
       }
@@ -3351,7 +3379,7 @@
       walk.yaw -= dx * 0.0042;
       walk.pitch = THREE.MathUtils.clamp(walk.pitch - dy * 0.0042, -1.1, 1.1);
     } else if ((manualPending || l2Ride) && ids.length === 1) {
-      cabLook.yaw = THREE.MathUtils.clamp(cabLook.yaw - dx * 0.0042, -1.25, 1.25);
+      cabLook.yaw = THREE.MathUtils.clamp(cabLook.yaw - dx * 0.0042, -cabYawLim(), cabYawLim());
       cabLook.pitch = THREE.MathUtils.clamp(cabLook.pitch - dy * 0.0042, -0.55, 0.45);
     } else if (ids.length === 2) {
       var a = pointers[ids[0]], b = pointers[ids[1]];
@@ -4645,6 +4673,29 @@
     dy = ((dy + Math.PI) % (Math.PI * 2) + Math.PI * 2) % (Math.PI * 2) - Math.PI;
     a.g.rotation.y += dy * Math.min(1, dt * 6);
     applyRig(a.rig, dt);
+    if (a.where === 1 || a.where === 2) leanRider(a);
+    else if (a.rig.spine.rotation.z) {   /* ya bajó del tren: sin inclinación lateral */
+      a.rig.hip.position.x = 0; a.rig.spine.rotation.z = 0; a.rig.head.rotation.z = 0;
+    }
+  }
+  /* Pasajeros: el empuje de la inercia los inclina (sentados poco y no
+     contra el respaldo; agarrados del tubo, a medias) y a quien va de pie
+     le saca un traspié con los brazos al frente para equilibrarse */
+  function leanRider(a) {
+    var r = a.rig, L = inertia[a.where].x * (a.lurchK || (a.lurchK = 0.75 + Math.random() * 0.5));
+    var Y = trainOf(a.where).rotation.y + a.g.rotation.y;
+    var f = -Math.sin(Y) * L, s = Math.cos(Y) * L;   /* empuje hacia su frente y hacia su derecha */
+    var seated = r.pose === 'sit' || r.pose === 'sitphone', holds = r.pose === 'pole' || r.pose === 'rail';
+    if (seated && f < 0) f *= 0.3;
+    var k = seated ? 0.7 : (holds ? 0.8 : 1), slide = seated ? 0 : (holds ? 0.6 : 1);
+    r.spine.rotation.x -= f * 0.15 * k;
+    r.spine.rotation.z = -s * 0.15 * k;
+    r.head.rotation.x -= f * 0.09;
+    r.head.rotation.z = -s * 0.08;
+    var st = 0.07 * slide / (r.scale || 1);
+    r.hip.position.z -= f * st; r.hip.position.x = s * st;
+    var arms = Math.min(0.9, Math.max(0, Math.abs(L) - 0.9) * 0.6) * slide;
+    r.sL.rotation.x += arms; if (!holds) r.sR.rotation.x += arms;
   }
   /* Separación: quien camina esquiva a los demás en el andén */
   /* Separación y paso: quien camina se aparta de los demás y, si alguien
@@ -4784,8 +4835,21 @@
      Cualquier mando manual lo desactiva. Interlock real: con puertas
      abiertas o a medio cerrar NO hay tracción. */
   var ATO_VMAX = 22.2, ATO_BRAKE = 0.95;   /* 80 km/h, la máxima de Metrorrey */
+  /* Curva de tracción del MM-90/MM-05 (motor Siemens 262 kW, 1182 rpm
+     nominal, engranes 5.625:1, ruedas de 740 mm): 1.0 m/s² hasta la
+     velocidad base (~29 km/h) y luego potencia constante, a ∝ 1/v. */
+  var TRAC_A = 1.0, TRAC_VB = 8.14;
+  function tracMax(v) { return TRAC_A * Math.min(1, TRAC_VB / Math.max(0.01, Math.abs(v))); }
+  /* Frenos (especificación Metrorrey): servicio 1.0 m/s² con tirón
+     limitado (da/dt = 0.7 m/s³, también en tracción); emergencia 1.3 m/s²,
+     neumático puro: entra de golpe y queda enclavado hasta detenerse. */
+  var BRAKE_SVC = 1.0, BRAKE_EMG = 1.3, JERK_SVC = 0.7, JERK_EMG = 6;
+  /* La emergencia frena igual a cualquier velocidad, pero cuánto zarandea
+     a la gente depende de con cuánta velocidad se aplicó: proporcional
+     hasta 40 km/h (pleno de ahí para arriba), con un mínimo de 0.2 */
+  var EMG_FULL_V = 11.1;
   var drive = { manual: false, speed: 0, throttle: 0, brake: false, doorTarget: 0, laps: 0, lever: 0,
-    ato: true, atoState: 'run', atoT: 0, aCmd: 0, served: false, quiet: 0 };
+    ato: true, atoState: 'run', atoT: 0, aCmd: 0, served: false, quiet: 0, emerg: false, aMan: 0, emergSev: 1 };
   var leverEl = document.getElementById('lever');
   if (leverEl) leverEl.addEventListener('input', function () { drive.lever = parseInt(leverEl.value, 10); });
   /* Paneles de cabina y caminar: minimizados por defecto (solo velocidad y
@@ -4851,12 +4915,26 @@
   holdButton('btnAccel', function () { drive.throttle = 1; }, function () { if (drive.throttle > 0) drive.throttle = 0; });
   holdButton('btnReverse', function () { drive.throttle = -1; }, function () { if (drive.throttle < 0) drive.throttle = 0; });
   holdButton('btnBrake', function () { drive.brake = true; }, function () { drive.brake = false; });
+  /* Freno de emergencia: se aplica en marcha y solo se restablece con el
+     tren detenido (otra vez E o el mismo botón) */
+  var btnEmergEl = document.getElementById('btnEmerg');
+  function emergency() {
+    if (drive.emerg) {
+      if (Math.abs(drive.speed) < 0.05) { drive.emerg = false; driveMsg('Freno de emergencia restablecido', false); }
+      return;
+    }
+    drive.emerg = true;
+    drive.emergSev = THREE.MathUtils.clamp(Math.abs(drive.speed) / EMG_FULL_V, 0.2, 1);
+    if (drive.ato) setAto(false);
+  }
+  if (btnEmergEl) btnEmergEl.addEventListener('click', emergency);
   var keysDown = {};
   window.addEventListener('keydown', function (e) {
     if (!drive.manual) return;
     keysDown[e.code] = true;
     if (e.code === 'KeyO') manualDoor(true);
     if (e.code === 'KeyC') manualDoor(false);
+    if (e.code === 'KeyE' && !e.repeat) emergency();
     if (['ArrowUp', 'ArrowDown', 'Space'].indexOf(e.code) >= 0) e.preventDefault();
   });
   window.addEventListener('keyup', function (e) { keysDown[e.code] = false; });
@@ -4864,6 +4942,7 @@
   function enterManual() {
     drive.riding = false;
     drive.manual = true; drive.speed = 0; drive.throttle = 0; drive.brake = false;
+    drive.emerg = false; drive.aMan = 0;
     drive.doorTarget = sim.door > 0.5 ? 1 : 0;
     /* Si el tren estaba lejos, arranca detenido en la marca de Cuauhtémoc */
     if (Math.abs(sim.trainX) > TILE_HALF) sim.trainX = 0;
@@ -4872,7 +4951,7 @@
     driveMsg('Automático activo: conduce solo, para en cada estación y sigue. Toca un mando para manejar tú.', false);
   }
   function exitManual() {
-    drive.manual = false; drive.speed = 0; drive.throttle = 0;
+    drive.manual = false; drive.speed = 0; drive.throttle = 0; drive.emerg = false; drive.aMan = 0;
     agents.forEach(function (a) {   /* intercambio a medias: cada quien a su lugar */
       if (a.where === 'world' && a.trainId === 1 && BOARD_STATES.indexOf(a.state) >= 0 && a.state !== 'board') {
         a.trainId = 0; a.door = -1; goWaitSpot(a);
@@ -4909,8 +4988,10 @@
           return 0;
         }
         /* Frenado: la desaceleración que hace falta para parar en la marca
-           (v²/2d). En cuanto llega a la de servicio se sigue exacta. */
-        var aReq = v > 0 ? v * v / (2 * dEff) : 0, aDes, jerkK = 1;
+           (v²/2d), descontando lo que se recorre mientras el freno entra con
+           tirón limitado. En cuanto llega a la de servicio se sigue exacta. */
+        var tRamp = Math.max(0, drive.aCmd + ATO_BRAKE) / JERK_SVC;
+        var aReq = v > 0 ? v * v / (2 * Math.max(0.01, dEff - v * tRamp * 0.5)) : 0, aDes, jerkK = 1;
         if (d < 5) {
           /* Últimos metros: curva v = √(2·0.6·d) que llega a cero JUSTO en
              la marca (desaceleración pareja, sin quedarse corto ni saltar) */
@@ -4918,8 +4999,10 @@
           aDes = v > vEnd ? -Math.min(1.5, aReq) : THREE.MathUtils.clamp((vEnd - v) * 1.5, -1.5, 0.4);
           jerkK = 3;
         } else if (aReq > ATO_BRAKE) aDes = -Math.min(1.5, aReq);
-        else aDes = THREE.MathUtils.clamp((ATO_VMAX - v) * 1.2, -0.6, 1.05);
-        var jerk = (aDes < drive.aCmd ? 3.2 : 1.6) * jerkK * dt;   /* sin tirones */
+        else aDes = THREE.MathUtils.clamp((ATO_VMAX - v) * 1.2, -0.6, tracMax(v));
+        /* Sin tirones: el da/dt de servicio (0.7 m/s³); en los últimos metros
+           más ágil para clavar la marca */
+        var jerk = (jerkK > 1 ? (aDes < drive.aCmd ? 3.2 : 1.6) * jerkK : JERK_SVC) * dt;
         drive.aCmd += THREE.MathUtils.clamp(aDes - drive.aCmd, -jerk, jerk);
         var braking = aDes < -0.05;
         driveMsg(braking ? 'Automático: frenando para Cuauhtémoc · ' + Math.round(d) + ' m' :
@@ -4957,26 +5040,36 @@
       driveMsg('Automático desactivado: tienes el control', true);
     }
     var doorsLocked = (sim.door < 0.02 && drive.doorTarget === 0);
-    var a = 0;
-    if (drive.ato) {
+    var a = 0, v0 = drive.speed, stopped = Math.abs(v0) < 0.05;
+    if (drive.emerg) {
+      a = -Math.sign(v0) * BRAKE_EMG;
+      driveMsg(stopped ? 'Detenido por freno de emergencia · E para restablecer' :
+        '¡FRENO DE EMERGENCIA! · ' + Math.round(Math.abs(v0) * 3.6) + ' km/h', true);
+    } else if (drive.ato) {
       a = atoStep(dt);
       if (!doorsLocked) a = 0;
     } else if (!doorsLocked) {
       if (keyThrottle !== 0) driveMsg('Cierra las puertas para poder avanzar (tecla C)', true);
       else if (sim.door > 0.02) driveMsg('Puertas abiertas — mira el espejo del andén a tu derecha', false);
-      a = -Math.sign(drive.speed) * 2.4;               /* freno de interlock */
+      a = -Math.sign(v0) * BRAKE_EMG;               /* freno de interlock */
     } else if (braking) {
-      a = -Math.sign(drive.speed) * 2.4;
-      if (Math.abs(drive.speed) < 0.1) drive.speed = 0;
+      a = -Math.sign(v0) * BRAKE_SVC;
       driveMsg('Frenando…', false);
     } else if (keyThrottle > 0) {
-      a = 1.05 * keyThrottle;
+      a = tracMax(v0) * keyThrottle;
       driveMsg('Tracción → Exposición' + (drive.lever > 0 && !keysDown.KeyW ? ' · palanca ' + drive.lever : ''), false);
     } else if (keyThrottle < 0) {
-      a = drive.speed > 0.05 ? -1.7 : -0.55; driveMsg('Reversa (máx. 14 km/h)', false);
+      a = v0 > 0.05 ? -BRAKE_SVC : -0.55; driveMsg('Reversa (máx. 14 km/h)', false);
     } else {
-      driveMsg(Math.abs(drive.speed) > 0.1 ? 'Deriva — sin tracción' :
+      driveMsg(Math.abs(v0) > 0.1 ? 'Deriva — sin tracción' :
         (Math.abs(sim.trainX) <= 3 ? 'En Cuauhtémoc: pulsa O para abrir puertas' : 'Detenido: W para avanzar'), false);
+    }
+    /* El mando llega con tirón limitado; la emergencia, casi de golpe */
+    if (drive.ato && !drive.emerg) drive.aMan = a;
+    else {
+      var jk = (drive.emerg || !doorsLocked ? JERK_EMG : JERK_SVC) * dt;
+      drive.aMan += THREE.MathUtils.clamp(a - drive.aMan, -jk, jk);
+      a = drive.aMan;
     }
     drive.speed += a * dt;
     if (!drive.ato) {
@@ -4986,8 +5079,10 @@
       drive.speed = Math.abs(drive.speed) > res ? drive.speed - Math.sign(drive.speed) * res : 0;
     }
     drive.speed = THREE.MathUtils.clamp(drive.speed, -3.9, ATO_VMAX);
-    if (!drive.ato && braking && Math.abs(drive.speed) < 0.2) drive.speed = 0;  /* sin rebote */
+    /* Con freno aplicado el tren se queda en cero, no cruza a reversa */
+    if ((drive.emerg || (!drive.ato && braking)) && (stopped || v0 * drive.speed <= 0)) { drive.speed = 0; drive.aMan = 0; }
     if (!doorsLocked) drive.speed = 0;
+    if (btnEmergEl && btnEmergEl.classList.contains('on') !== drive.emerg) btnEmergEl.classList.toggle('on', drive.emerg);
     sim.trainX += drive.speed * dt;
     if (sim.trainX > TILE_HALF) { sim.trainX -= TILE_LEN; onWrap(1); }
     else if (sim.trainX < -TILE_HALF) { sim.trainX += TILE_LEN; onWrap(-1); }
@@ -5002,10 +5097,11 @@
     if (btnDoorsEl) btnDoorsEl.textContent = drive.doorTarget ? 'Cerrar puertas (C)' : 'Abrir puertas (O)';
     var kmh = Math.round(Math.abs(drive.speed) * 3.6);
     if (driveSpeedEl) driveSpeedEl.textContent = kmh + ' km/h' + (drive.speed < -0.05 ? ' R' : '');
-    setStatus(drive.riding ? 'Viajando a bordo' : (drive.ato ? 'Conducción automática' : 'Modo conductor'),
+    setStatus(drive.riding ? 'Viajando a bordo' : (drive.emerg ? 'FRENO DE EMERGENCIA' :
+      (drive.ato ? 'Conducción automática' : 'Modo conductor')),
       (atStation ? 'Estación Cuauhtémoc' : 'Siguiente: Cuauhtémoc · ' + Math.round(dS) + ' m') +
       ' · ' + kmh + ' km/h' + (doorsLocked ? '' : ' · PUERTAS ABIERTAS'),
-      doorsLocked ? '#1b4f9c' : '#d8432a');
+      doorsLocked && !drive.emerg ? '#1b4f9c' : '#d8432a');
     setLED(atStation ? 'CUAUHTÉMOC' : 'EN RUTA', 'EXPOSICIÓN');
     train.position.y = 0; train.rotation.x = Math.abs(drive.speed) > 0.2 ? Math.sin(elapsed * 2.2) * 0.0012 : 0;
     if (headSpot) headSpot.intensity = Math.abs(drive.speed) > 0.2 ? 1.5 : 0.45;
@@ -5130,6 +5226,10 @@
     var x1 = sim.trainX, x2 = trainWX(2);
     var dx = x1 - prevTrainX; prevTrainX = x1;
     var dx2 = x2 - prevTrain2X; prevTrain2X = x2;
+    if (dt > 0) {
+      stepInertia(inertia[1], dx / dt, dt, drive.emerg ? drive.emergSev : 1);
+      stepInertia(inertia[2], dx2 / dt, dt);
+    }
     train.position.x = x1; train2.position.x = x2;
     /* Fuera de escena (entre ciclos) el tren no se dibuja, salvo si viajas dentro */
     var rideZ = walk.active && walk.inTrain && !walk.inTrain.l2 ? walk.inTrain.z : null;

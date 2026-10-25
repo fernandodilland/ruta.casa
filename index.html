@@ -6,7 +6,7 @@
 <title>Metrorrey MM-05 — Estación Cuauhtémoc · Modelo 3D</title>
 <meta name="description" content="Modelo 3D offline y detallado de un tren Bombardier MM-05 del Metrorrey, con interior completo y techos transparentes configurables, en la estación elevada Cuauhtémoc.">
 <link rel="icon" href="data:,">
-<link rel="stylesheet" href="css/style.css?v=33">
+<link rel="stylesheet" href="css/style.css?v=34">
 </head>
 <body>
 <main id="app">
@@ -116,8 +116,9 @@
       <button type="button" id="btnBrake">■ Freno<kbd>Espacio</kbd></button>
       <button type="button" id="btnReverse">▼ Reversa<kbd>S</kbd></button>
       <button type="button" id="btnDoors">Abrir puertas (O)</button>
+      <button type="button" id="btnEmerg" class="emerg" title="Freno de emergencia: 1.3 m/s², queda aplicado hasta detenerse. Detenido, vuelve a pulsarlo para restablecer.">● Emergencia<kbd>E</kbd></button>
     </div>
-    <p id="driveMsg" class="drive-msg">W/↑ acelera · S/↓ reversa · O/C puertas</p>
+    <p id="driveMsg" class="drive-msg">W/↑ acelera · S/↓ reversa · E emergencia · O/C puertas</p>
     <p class="drive-note">Línea infinita: la siguiente estación se ve al fondo y cada parada tiene otra gente. Sin puertas cerradas no hay tracción. El espejo naranja a tu derecha refleja el andén. Sal con cualquier otra vista.</p>
   </section>
 
@@ -162,6 +163,6 @@
 
 <!-- Sin módulos ni CDN: funciona offline con doble clic (file://). -->
 <script src="lib/three.min.js"></script>
-<script src="js/main.js?v=53"></script>
+<script src="js/main.js?v=55"></script>
 </body>
 </html>
