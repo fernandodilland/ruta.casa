@@ -26,8 +26,10 @@ llega, abre puertas, suben y bajan pasajeros, cierra y sale, en ciclo.
   sientan o se agarran del tubo y viajan. Nadie aparece ni desaparece a
   la vista.
 - 🎮 **Modo conductor** (vista Cabina): manejo automático o manual sobre
-  una línea infinita procedural, con estaciones a 736 m, frenado suave,
-  interlock de puertas y espejos convexos de andén.
+  una línea infinita procedural, con estaciones a 736 m, frenado suave y
+  de emergencia, interlock de puertas y espejos convexos de andén. Si
+  paras antes o después de la marca, la gente sube y baja por las puertas
+  que queden frente al andén (corre si le quedan lejos).
 - 🚶 **Primera persona** (vista Caminar): recorre el andén, sube al tren,
   baja a la conexión, sal a la calle o cruza al edificio de transbordo y
   a la Línea 2 subterránea.

@@ -3478,10 +3478,14 @@
     if (!t || t.door < 0.7) return false;
     if (z !== undefined && (z - t.z) * t.side < 0) return false;
     for (var i = 0; i < DOOR_U.length; i++) {
+      if (!doorFacesPlatform(t, i)) continue;
       if (Math.abs(x - (t.tx + DOOR_U[i])) <= 0.55) return true;
     }
     return false;
   }
+  /* Línea 1: una puerta abierta fuera del andén no deja bajar (darías a
+     las vías); los trenes de la Línea 2 siempre paran en su marca */
+  function doorFacesPlatform(t, i) { return t.l2 || Math.abs(t.tx + DOOR_U[i]) <= PLAT_DOOR_LIM; }
   /* Piso bajo (x, z): de las superficies posibles ahí (calle, banqueta,
      viaducto, andenes, N2, edificio de transbordo, distribuidor, andenes
      de la Línea 2, escaleras) la más cercana a la altura actual; así se
@@ -3672,6 +3676,7 @@
     if (!t || t.door < 0.7 || (z - t.z) * t.side < 0) return null;
     var best = null;
     for (var i = 0; i < DOOR_U.length; i++) {
+      if (!doorFacesPlatform(t, i)) continue;
       var d = t.tx + DOOR_U[i] - x;
       if (Math.abs(d) <= 1.3 && (best === null || Math.abs(d) < Math.abs(best))) best = d;
     }
@@ -4382,8 +4387,47 @@
   }
 
   /* --- Abordar: fila a los lados de la puerta, primero bajan --- */
+  /* El andén va de −26 a 26 m: una puerta sirve si queda completa frente a
+     él. Así, parado un poco antes o después de la marca (o con un vagón
+     fuera de la estación), se sube y se baja solo por esas puertas. */
+  var PLAT_DOOR_LIM = 25.2;
+  function doorAtPlatform(id, i) { return Math.abs(trainWX(id) + DOOR_X[i]) <= PLAT_DOOR_LIM; }
+  function platformDoors(id) {
+    var n = 0;
+    for (var i = 0; i < DOOR_X.length; i++) if (doorAtPlatform(id, i)) n++;
+    return n;
+  }
   function stationStop(S) {
-    return Math.abs(trainWX(S.id)) <= 3.2 && Math.abs(S.speed) < 0.05;
+    return Math.abs(S.speed) < 0.05 && platformDoors(S.id) > 0;
+  }
+  /* La puerta más cercana de su vagón que dé al andén (−1 si ninguna) */
+  function nearestCarDoor(id, lx) {
+    var best = -1, bd = 1e9;
+    DOOR_X.forEach(function (dx, i) {
+      var d = Math.abs(dx - lx);
+      if (Math.sign(dx) === Math.sign(lx || 1) && doorAtPlatform(id, i) && d < bd) { bd = d; best = i; }
+    });
+    return best;
+  }
+  /* Al abrir puertas (también tras moverte y volver a abrir): quien iba a
+     bajar se va a la puerta de su vagón que sí dé al andén. Si su vagón
+     quedó fuera de la estación espera junto a su puerta: si mueves el tren
+     y vuelves a abrir con su vagón en el andén, baja entonces. */
+  function retargetAlighters(id) {
+    agents.forEach(function (a) {
+      if (a.where !== id || !a.alight) return;
+      var best = nearestCarDoor(id, a.g.position.x), old = a.door;
+      if (best < 0 || best === old) return;
+      a.door = best;
+      if (a.state === 'toDoorIn' || a.state === 'exitWait') { reflowExit(id, old); a.exitIdx = -1; reflowExit(id, best); }
+    });
+  }
+  /* Se cerraron las puertas sin que subiera: espera ahí mismo (en Cabina
+     el tren puede moverse y volver a abrir; irá a la puerta más cercana) */
+  function waitHere(a) {
+    a.trainId = 0; a.door = -1; a.path = []; a.state = 'wait'; a.t = 0;
+    a.spot = { x: a.g.position.x, z: a.g.position.z }; a.yawT = a.P.face;
+    a.rig.running = false;
   }
   function boardingOpen(id) {
     var S = simOf(id);
@@ -4395,7 +4439,7 @@
     var P = a.P, tx = trainWX(P.trainId), best = -1, bd = 1e9;
     DOOR_X.forEach(function (dx, i) {
       var d = Math.abs(tx + dx - a.g.position.x);
-      if (Math.abs(tx + dx) < 25 && d < bd) { bd = d; best = i; }
+      if (doorAtPlatform(P.trainId, i) && d < bd) { bd = d; best = i; }
     });
     if (best < 0) return;
     a.trainId = P.trainId; a.door = best; a.spot = null;
@@ -4407,8 +4451,12 @@
           (o.state === 'toQueue' || o.state === 'queue');
       }).length;
       a.side = k; a.state = 'toQueue'; a.queuedAt = simTime;
-      var qx = doorX + k * (0.75 + 0.5 * (n % 3)), qz = P.queueZ + P.ps * 0.55 * Math.floor(n / 3);
+      /* la fila no se sale del andén cuando la puerta queda en su orilla */
+      var qx = THREE.MathUtils.clamp(doorX + k * (0.75 + 0.5 * (n % 3)), -25.4, 25.4);
+      var qz = P.queueZ + P.ps * 0.55 * Math.floor(n / 3);
       setPose(a.rig, 'stand');
+      /* lejos de la puerta (el tren paró adelante o atrás): corre para alcanzarlo */
+      a.rig.running = Math.abs(qx - a.g.position.x) > 6;
       go(a, [{ x: qx, z: qz }], function () {
         a.state = 'queue'; a.yawT = Math.atan2(-(doorX - qx), -(P.edgeZ - qz));
       });
@@ -4454,9 +4502,10 @@
     else setPose(a.rig, poseFor(s.type));
   }
   function abortBoarding(id) {
+    var stay = id === 1 && (drive.manual || drive.riding);
     agents.forEach(function (a) {
       if (a.where === 'world' && a.trainId === id && (a.state === 'toQueue' || a.state === 'queue')) {
-        a.trainId = 0; a.door = -1; goWaitSpot(a);
+        if (stay) waitHere(a); else { a.trainId = 0; a.door = -1; goWaitSpot(a); }
       }
     });
   }
@@ -4571,6 +4620,7 @@
     if (!stationStop(S) || S.door < 0.85) return;
     if (id === 1 && (drive.manual || drive.riding) && drive.doorTarget !== 1) return;
     DOOR_X.forEach(function (dx, i) {
+      if (!doorAtPlatform(id, i)) return;   /* esa puerta quedó fuera del andén */
       var gate = doorGates[id][i], firstOut = null, pendingOut = 0, firstIn = null;
       agents.forEach(function (a) {
         if (a.trainId !== id || a.door !== i) return;
@@ -4682,16 +4732,24 @@
         break;
       case 'queue':
         a.rig.headYT = 0;
-        if (!boardingOpen(a.trainId)) { a.trainId = 0; a.door = -1; goWaitSpot(a); }
+        if (!boardingOpen(a.trainId)) {
+          if (a.trainId === 1 && (drive.manual || drive.riding)) waitHere(a);
+          else { a.trainId = 0; a.door = -1; goWaitSpot(a); }
+        }
         break;
       case 'ride':
         var S = simOf(a.where), x = trainWX(a.where);
         if (a.alight && a.stopSeq === S.stopSeq) {
           var coming = x * S.moveDir <= 0 || Math.abs(x) < 3.2;
-          var ready = a.alightWhen === 'early' ? (coming && Math.abs(x) < 70) :
+          /* con las puertas abiertas en la estación baja quien falte, aunque
+             el tren se haya parado pasado de la marca */
+          var ready = boardingOpen(a.where) || (a.alightWhen === 'early' ? (coming && Math.abs(x) < 70) :
             a.alightWhen === 'brake' ? (coming && Math.abs(x) < 30 && S.speed < 5) :
-            (stationStop(S) && S.door > 0.05);
-          if (ready) startAlight(a);
+            (stationStop(S) && S.door > 0.05));
+          if (ready && boardingOpen(a.where)) {   /* por la puerta de su vagón que dé al andén */
+            var dn = nearestCarDoor(a.where, a.g.position.x);
+            if (dn >= 0) { a.door = dn; startAlight(a); }
+          } else if (ready) startAlight(a);
         }
         else if (a.alight && a.stopSeq !== S.stopSeq) a.alight = false;
         a.lookT -= dt;
@@ -4862,6 +4920,9 @@
         S.near = false; S.stopSeq++;
         var P = platOfTrain(S.id); P.density = rollDensity();   /* nueva oleada de gente */
       }
+      var open = boardingOpen(S.id);
+      if (open && !S.wasOpen) retargetAlighters(S.id);
+      S.wasOpen = open;
       serviceDoors(S.id);
     });
     [PLAT.A, PLAT.B].forEach(function (P) {
@@ -4934,14 +4995,21 @@
   var driveSpeedEl = document.getElementById('driveSpeed');
   var driveMsgEl = document.getElementById('driveMsg');
   var btnDoorsEl = document.getElementById('btnDoors');
-  function driveMsg(txt, warn) {
+  var driveMsgHold = 0;
+  function driveMsg(txt, warn, hold) {
     if (!driveMsgEl) return;
+    var now = performance.now();
+    if (hold) driveMsgHold = now + hold * 1000;
+    else if (now < driveMsgHold) return;   /* un aviso puntual (puertas) se deja leer */
     if (driveMsgEl.textContent !== txt) driveMsgEl.textContent = txt;
     driveMsgEl.className = warn ? 'drive-msg warn' : 'drive-msg';
   }
   function setDoorTarget(open) {
     if (open && Math.abs(drive.speed) > 0.05) {
-      driveMsg('Detén el tren para abrir las puertas', true); return;
+      driveMsg('Detén el tren para abrir las puertas', true, 2.5); return;
+    }
+    if (open && !platformDoors(1)) {   /* control de puertas: fuera del andén no abren */
+      driveMsg('Fuera del andén: aquí las puertas no abren', true, 2.5); return;
     }
     drive.doorTarget = open ? 1 : 0;
     if (!open) abortBoarding(1);
@@ -5090,7 +5158,8 @@
       driveMsg('Automático desactivado: tienes el control', true);
     }
     var doorsLocked = (sim.door < 0.02 && drive.doorTarget === 0);
-    var a = 0, v0 = drive.speed, stopped = Math.abs(v0) < 0.05;
+    var a = 0, v0 = drive.speed, stopped = Math.abs(v0) < 0.05, pDoors = platformDoors(1);
+    var pdTxt = pDoors < 4 ? ' (' + pDoors + ' de 4 puertas frente al andén)' : '';
     if (drive.emerg) {
       a = -Math.sign(v0) * BRAKE_EMG;
       driveMsg(stopped ? 'Detenido por freno de emergencia · E para restablecer' :
@@ -5100,7 +5169,7 @@
       if (!doorsLocked) a = 0;
     } else if (!doorsLocked) {
       if (keyThrottle !== 0) driveMsg('Cierra las puertas para poder avanzar (tecla C)', true);
-      else if (sim.door > 0.02) driveMsg('Puertas abiertas — mira el espejo del andén a tu derecha', false);
+      else if (sim.door > 0.02) driveMsg('Puertas abiertas' + pdTxt + ' — mira el espejo del andén a tu derecha', false);
       a = -Math.sign(v0) * BRAKE_EMG;               /* freno de interlock */
     } else if (braking) {
       a = -Math.sign(v0) * BRAKE_SVC;
@@ -5112,7 +5181,7 @@
       a = v0 > 0.05 ? -BRAKE_SVC : -0.55; driveMsg('Reversa (máx. 14 km/h)', false);
     } else {
       driveMsg(Math.abs(v0) > 0.1 ? 'Deriva — sin tracción' :
-        (Math.abs(sim.trainX) <= 3 ? 'En Cuauhtémoc: pulsa O para abrir puertas' : 'Detenido: W para avanzar'), false);
+        (pDoors ? 'En Cuauhtémoc' + pdTxt + ': pulsa O para abrir puertas' : 'Detenido: W para avanzar'), false);
     }
     /* El mando llega con tirón limitado; la emergencia, casi de golpe */
     if (drive.ato && !drive.emerg) drive.aMan = a;
@@ -5143,7 +5212,7 @@
     var step = dt / 1.3;
     if (drive.doorTarget > sim.door) sim.door = Math.min(drive.doorTarget, sim.door + step);
     else if (drive.doorTarget < sim.door) sim.door = Math.max(drive.doorTarget, sim.door - step);
-    var atStation = Math.abs(sim.trainX) <= 3;
+    var atStation = pDoors > 0;
     if (btnDoorsEl) btnDoorsEl.textContent = drive.doorTarget ? 'Cerrar puertas (C)' : 'Abrir puertas (O)';
     var kmh = Math.round(Math.abs(drive.speed) * 3.6);
     if (driveSpeedEl) driveSpeedEl.textContent = kmh + ' km/h' + (drive.speed < -0.05 ? ' R' : '');
