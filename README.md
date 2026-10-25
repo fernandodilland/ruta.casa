@@ -282,3 +282,9 @@ Terceros (no cubiertos por la licencia de arriba):
 - Nombres, logotipos y balizados de Metrorrey, STC Metro y SITEUR son
   marcas de sus organismos. Este es un proyecto de aficionados, sin
   afiliación ni fines de lucro.
+
+<!-- flujo-pc-readme:inicio -->
+## Desarrollo y despliegue
+
+Se prueba, compila y despliega desde la PC Debian: los comandos de este repo están en el bloque «Flujo PC» de [`AGENTS.md`](AGENTS.md) y la guía completa en `~/git/Personal/sistema.fernandodilland/docs/desarrollo/FLUJO.md` (repo `fernandodilland/sistema`).
+<!-- flujo-pc-readme:fin -->
