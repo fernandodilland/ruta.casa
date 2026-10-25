@@ -4979,7 +4979,12 @@
         (Math.abs(sim.trainX) <= 3 ? 'En Cuauhtémoc: pulsa O para abrir puertas' : 'Detenido: W para avanzar'), false);
     }
     drive.speed += a * dt;
-    if (!drive.ato) drive.speed -= drive.speed * 0.1 * dt;   /* resistencia */
+    if (!drive.ato) {
+      /* Resistencia al avance (rodadura + aire), poca como en un tren real:
+         ~0.05 m/s² a 80 km/h. Antes era 0.1·v y topaba la tracción en ~38 km/h. */
+      var res = (0.012 + 0.00008 * drive.speed * drive.speed) * dt;
+      drive.speed = Math.abs(drive.speed) > res ? drive.speed - Math.sign(drive.speed) * res : 0;
+    }
     drive.speed = THREE.MathUtils.clamp(drive.speed, -3.9, ATO_VMAX);
     if (!drive.ato && braking && Math.abs(drive.speed) < 0.2) drive.speed = 0;  /* sin rebote */
     if (!doorsLocked) drive.speed = 0;
