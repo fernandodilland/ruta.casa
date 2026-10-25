@@ -3262,8 +3262,10 @@
        ?vista=corte&escenario=noche&estacion=auto&estacionOpacidad=12
         &tren=visible&trenOpacidad=7&objetivo=x,y,z&distancia=42
         &acimut=35&polar=62
-     En Caminar se guarda pos=x,y,z más yaw/pitch; en Cabina/Viajar L2,
-     yaw/pitch de la mirada. Al abrir ese enlace se restaura todo.
+     En Caminar se guarda pos=x,y,z más yaw/pitch; a bordo de un tren pos
+     va relativa al tren y abordo=1|2 (Línea 1) o 3|4 (Línea 2), porque el
+     tren no estará en el mismo punto al abrir el enlace. En Cabina/Viajar
+     L2, yaw/pitch de la mirada. Al abrir ese enlace se restaura todo.
      Se escribe con replaceState (sin recargar ni ensuciar el historial),
      a lo más cada 600 ms mientras te mueves, y al instante al tocar
      una vista o un ajuste. */
@@ -3280,7 +3282,15 @@
     var tm = selVal('trainRoofMode'); if (tm) q.set('tren', tm);
     var to = selVal('trainRoofMin'); if (to !== null) q.set('trenOpacidad', to);
     if (walk.active) {
-      q.set('pos', [walk.pos.x, walk.pos.y, walk.pos.z].map(function (n) { return urlNum(n, 2); }).join(','));
+      var wp = [walk.pos.x, walk.pos.y, walk.pos.z], it = walk.inTrain;
+      if (it && it.l2) {
+        var lp = l2Local(walk.pos.x, walk.pos.z);
+        wp = [lp.x - it.S.g.position.x, walk.pos.y, lp.z]; q.set('abordo', it.id);
+      } else if (it) {
+        var tid = it.z === TRAIN_Z ? 1 : 2;
+        wp[0] -= trainOf(tid).position.x; q.set('abordo', tid);
+      }
+      q.set('pos', wp.map(function (n) { return urlNum(n, 2); }).join(','));
       q.set('yaw', urlDeg(walk.yaw)); q.set('pitch', urlDeg(walk.pitch));
     } else if (manualPending || l2Ride) {
       q.set('yaw', urlDeg(cabLook.yaw)); q.set('pitch', urlDeg(cabLook.pitch));
@@ -3321,6 +3331,45 @@
     el.value = value;
     el.dispatchEvent(new Event(ev || 'change', { bubbles: true }));
   }
+  /* Posición de un enlace en Caminar: ya a la altura de su piso (sin caer
+     desde la altura guardada). Si queda dentro de un tren (enlace viejo,
+     sin abordo) te sube a ese tren; si ahí no hay piso transitable (las
+     vías del viaducto, fuera del área), al andén más cercano. */
+  function placeWalkSafe(x, y, z) {
+    var floor = y - EYE_H;
+    if (Math.abs(floor - (BODY_Y + FLOOR_DY)) < 0.3) {
+      var id = Math.abs(z - TRAIN_Z) <= 1.3 ? 1 : (Math.abs(z - TRACK_B_Z) <= 1.3 ? 2 : 0);
+      if (id) { walk.aboard = { id: id, rel: Math.abs(x) <= 13 ? x : Math.sign(x) * 8.05, z: z }; return; }
+    }
+    if (Math.abs(floor - L2_FLOOR) < 0.3) {
+      var lp = l2Local(x, z), lid = Math.abs(lp.z - 3) <= 1.3 ? 3 : (Math.abs(lp.z + 3) <= 1.3 ? 4 : 0);
+      if (lid) { walk.aboard = { id: lid, rel: Math.sign(lp.x || 1) * 8.05, z: lp.z }; return; }
+    }
+    var g = groundAt(x, z, floor);
+    var inArea = x >= -75 && x <= 90 && z >= -40 && z <= ZC + L2_HALF + 4;
+    if (g === null || Math.abs(g - RAIL_Y) < 0.01 || Math.abs(g - floor) > 0.6 || !inArea) {
+      var B = z < (TRAIN_Z + TRACK_B_Z) / 2;
+      x = THREE.MathUtils.clamp(x, -22, 22); z = B ? -7.3 : 3.1; g = PLAT_Y;
+    }
+    walk.pos.set(x, g + EYE_H, z); walk.ground = g;
+  }
+  /* Subirte al tren del enlace en el primer cuadro (ya con los trenes en
+     su lugar): el mismo punto del vagón, en el pasillo, y sigues viajando */
+  function boardFromUrl(b) {
+    var rel = THREE.MathUtils.clamp(Math.abs(b.rel), 0.8, 12.5) * (b.rel < 0 ? -1 : 1);
+    if (b.id >= 3) {
+      var S = l2Sims.filter(function (s) { return s.id === b.id; })[0];
+      if (!S) return;
+      var lz = THREE.MathUtils.clamp(b.z, S.l2t.z - 1, S.l2t.z + 1), w = l2World(S.g.position.x + rel, lz);
+      walk.ground = L2_FLOOR; walk.pos.set(w.x, L2_FLOOR + EYE_H, w.z);
+      walk.inTrain = l2TrainAt(w.x, w.z);
+    } else {
+      var tz = b.id === 1 ? TRAIN_Z : TRACK_B_Z, z = THREE.MathUtils.clamp(b.z, tz - 1, tz + 1);
+      walk.ground = BODY_Y + FLOOR_DY;
+      walk.pos.set(trainOf(b.id).position.x + rel, walk.ground + EYE_H, z);
+      walk.inTrain = trainAtWalk(walk.pos.x, z);
+    }
+  }
   function restoreFromUrl() {
     urlRestoring = true;
     /* Ajustes: se fijan en los controles y sus propios eventos los aplican */
@@ -3333,11 +3382,11 @@
     var vista = VIEWS[URLP.get('vista')] ? URLP.get('vista') : 'anden';
     applyView(vista);
     if (walk.active) {
-      var pos = urlVec('pos');
+      var pos = urlVec('pos'), ab = parseInt(URLP.get('abordo'), 10);
       if (pos) {
-        walk.pos.set(pos[0], pos[1], pos[2]);
-        walk.ground = groundAt(pos[0], pos[2], pos[1] - EYE_H);
         walk.inTrain = null; walk.seat = null;
+        if (ab >= 1 && ab <= 4) walk.aboard = { id: ab, rel: pos[0], z: pos[2] };
+        else placeWalkSafe(pos[0], pos[1], pos[2]);
       }
       var wy = urlFloat('yaw'), wp2 = urlFloat('pitch');
       if (wy !== null) walk.yaw = wy * Math.PI / 180;
@@ -3679,6 +3728,7 @@
   }
   function updateWalk(dt) {
     if (!walk.active) return;
+    if (walk.aboard) { boardFromUrl(walk.aboard); walk.aboard = null; }
     if (walk.seat) {
       updateSeated(dt, keysAll.KeyW || keysAll.ArrowUp || walk.fwdBtn);
       updateCamera();
@@ -5127,6 +5177,13 @@
     drive.served = Math.abs(sim.trainX) < 3.2 && !moving;
     if (sim.state === 'away') sim.trainX = THREE.MathUtils.clamp(sim.trainX, -TILE_HALF, TILE_HALF);
     setAto(true);
+    /* Ya en marcha (te subiste con un enlace mientras llega o sale): el
+       automático sigue con el freno o la tracción que ya traía; empezar de
+       cero con tirón limitado lo hacía pasarse de la estación */
+    if (sim.state === 'arriving') {
+      var need = drive.speed * drive.speed / (2 * Math.max(0.5, distToStop()));
+      drive.aCmd = need > 0.6 ? -Math.min(1.5, need) : 0;
+    } else if (moving) drive.aCmd = tracMax(drive.speed);
     if (sim.state === 'closing') { drive.doorTarget = 0; drive.atoState = 'close'; drive.atoT = 0; }
   }
   function exitRide() {
