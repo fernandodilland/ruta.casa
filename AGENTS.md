@@ -5,7 +5,8 @@
 
 Se trabaja en la **PC Debian «computadora»** (usuario `dev`, consolas de Sistemas › Desarrollo), no en la Mac.
 Antes de tocar nada lee la guía ~/git/Personal/sistema.fernandodilland/docs/desarrollo/FLUJO.md (§3: reglas para el LLM) y, si existe,
-`~/dev/registros/ruta.casa/ULTIMO.md` (lo último que se probó, compiló o desplegó y qué falló).
+`~/dev/registros/ruta.casa/ULTIMO.md` (lo último que se probó, compiló o desplegó y qué falló). En la misma carpeta:
+`REFERENCIA.md` (comandos, API, tablas, archivos) y `OPERACION.md` (qué hacer cuando algo falla).
 
 - **Nunca** pruebes contra productivo ni leas sus `.env`: los de la PC son locales (claves de la PC).
 - **Nunca** uses scripts que entren por `ssh hivelocity` como root: son de la Mac. A productivo solo se llega con
