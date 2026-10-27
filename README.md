@@ -268,5 +268,5 @@ Terceros (no cubiertos por la licencia de arriba):
 <!-- flujo-pc-readme:inicio -->
 ## Desarrollo y despliegue
 
-Se prueba, compila y despliega desde la PC Debian con `dev` (empieza con `dev contexto`): los comandos de este repo están en el bloque «Flujo PC» de [`AGENTS.md`](AGENTS.md) y la guía completa en `~/git/Personal/sistema.fernandodilland/docs/desarrollo/README.md` (repo `fernandodilland/sistema`).
+Se prueba, compila y despliega desde la Computadora (Debian) con `dev` (empieza con `dev contexto`): los comandos de este repo están en el bloque «Flujo de trabajo» de [`AGENTS.md`](AGENTS.md) y la guía completa en `~/git/Personal/sistema.fernandodilland/docs/desarrollo/README.md` (repo `fernandodilland/sistema`).
 <!-- flujo-pc-readme:fin -->
