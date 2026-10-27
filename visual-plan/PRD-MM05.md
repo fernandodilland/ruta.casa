@@ -34,7 +34,7 @@ equipos de techo visibles en los 3/4.
 - Luz ámbar pequeña sobre cada puerta; rejilla de ventilación baja entre
   puertas; espejos de cabina; acoplador expuesto con mangueras y estribos.
 - Techo: caja de A/A gris topo con rejillas sobre la cabina y equipos grises;
-  pantógrafo de rombo tocando el hilo de contacto.
+  pantógrafo de brazo único en «V» acostada tocando el hilo (el rombo/tijera doble se descartó).
 
 ## Interior (de `interior-mm93.jpg`)
 - Bancas longitudinales corridas en ambos muros, moldeadas, alternando azul
@@ -42,18 +42,19 @@ equipos de techo visibles en los 3/4.
 - Tubos de acero inoxidable: verticales curvos junto a puertas/vestíbulos y
   pasamanos longitudinales bajo el techo. Sin correas colgantes visibles.
 - Techo blanco con tira fluorescente longitudinal continua; paneles
-  publicitarios/mapa inclinados sobre las ventanas; piso gris antideslizante
+  publicitarios/mapa verticales contra la pared sobre las ventanas; piso gris antideslizante
   con puntos; muros blanco hueso; puertas blancas por dentro.
 - Cabina visible tras el parabrisas: consola oscura, asiento del conductor.
 
-## Techos transparentes (requisito nuevo)
+## Techos transparentes (hecho)
 - Techo de estación y techo+plafón del tren con modos Auto / Visible /
   Transparente / Oculto y control de opacidad mínima para cada uno.
 - Auto: se desvanece suave al acercarse la cámara o al ver desde arriba;
-  regresa al alejarse. Vistas nuevas: Interior (la cámara viaja con el tren)
-  y Cenital.
+  regresa al alejarse. Vistas Interior (la cámara viaja con el tren) y Cenital. En Caminar/Cabina no se desvanecen.
 
 ## Aceptación
 Capturas del navegador (frente 3/4, lateral, cenital con techos
 transparentes e interior desde el pasillo) comparadas contra las referencias;
 corregir la diferencia más visible y repetir.
+
+Vía: placa de concreto sin balasto (como el metro real). Detalle de lo implementado: `../pendientes.md`.

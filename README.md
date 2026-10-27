@@ -99,46 +99,30 @@ enlace). La URL se actualiza al instante al tocar una vista o un ajuste,
 y mientras mueves la cámara a lo más cada 600 ms, sin recargar la página
 ni llenar el historial. También funciona abriendo el archivo local.
 
-## Despliegue (Cloudflare Workers Static Assets)
+## Despliegue
 
-El sitio se publica en [ruta.casa](https://ruta.casa) como *static
-assets* de Cloudflare Workers, sin código de servidor. La configuración
-está en [`wrangler.toml`](wrangler.toml) y lo no público se excluye con
-[`.assetsignore`](.assetsignore). Para redesplegar:
+Push a `main` → Workers Builds publica el Worker `ruta-casa` (Cloudflare Workers Static Assets, sin código de servidor)
+en [ruta.casa](https://ruta.casa). Config: [`wrangler.toml`](wrangler.toml); lo no público se excluye en
+[`.assetsignore`](.assetsignore). No usar `npx wrangler deploy` a mano.
 
-```sh
-npx wrangler deploy
-```
-
-> Detalles del despliegue en la sección «En línea» de la documentación
-> de Cloudflare: https://developers.cloudflare.com/workers/static-assets/
-
-## Estructura del repositorio
+## Estructura y construcción
 
 ```
-index.html        Página principal y paneles de control
-css/style.css     Estilos
-js/main.js        La escena 3D completa (¡un solo archivo!)
-lib/three.min.js  Three.js r128 local
-ruta/index.html   Página «Roadmap» del sitio (botón Salir)
-visual-plan/      PRD visual y fotos de referencia (no las carga la página)
-docs/             Imágenes para esta documentación
-pendientes.md     Bitácora de pendientes y correcciones del modelo
-wrangler.toml     Despliegue en Cloudflare Workers (static assets)
+index.html            página principal y paneles
+css/style.css         estilos
+js/main.js            toda la escena 3D (~5 400 líneas, JS clásico, sin módulos ni build)
+lib/three.min.js      Three.js r128 local
+ruta/index.html       página «Roadmap» (botón Salir)
+visual-plan/          PRD-MM05.md + refs/ (fotos Wikimedia; no las carga la página)
+docs/                 imágenes de la documentación
+pendientes.md         tareas abiertas y bitácora de lo hecho
+transbordo-cuauhtemoc.md  especificación de los 5 niveles del transbordo
+AGENTS.md             contexto y convenciones para agentes/LLM
+wrangler.toml         despliegue
 ```
 
-## ¿Cómo está hecho?
-
-- **Un solo archivo de escena** (`js/main.js`, ~4 800 líneas, JavaScript
-  clásico sin módulos) para que funcione con `file://` sin build.
-- **Rendimiento**: lo fijo se fusiona en una malla por material, lo
-  repetido va instanciado, cada persona es una sola `SkinnedMesh`,
-  sombras cada 2 cuadros y resolución interna adaptable.
-- **Fidelidad**: el MM-05 sigue fotos de referencia (guardadas en
-  `visual-plan/refs/`, de Wikimedia Commons): balizado, nariz achaflanada,
-  pantógrafo de media tijera, vía en placa de concreto, interior de la
-  familia MM-90/MM-93. La nota de fidelidad está en
-  [`visual-plan/PRD-MM05.md`](visual-plan/PRD-MM05.md).
+- **Rendimiento**: lo fijo se fusiona en una malla por material, lo repetido va instanciado, cada persona es una `SkinnedMesh`, sombras cada 2 cuadros, resolución interna adaptable.
+- **Fidelidad**: el MM-05 sigue fotos de `visual-plan/refs/` (balizado, nariz achaflanada, pantógrafo de brazo único, vía en placa, interior MM-90/MM-93); ver [`visual-plan/PRD-MM05.md`](visual-plan/PRD-MM05.md).
 
 ## 🗺️ Hoja de ruta (roadmap)
 
@@ -167,7 +151,7 @@ a los demás sistemas del país. Todo ayuda: ver
 - [ ] **Línea 3** (Hospital Metropolitano → General I. Zaragoza)
   - [ ] Tren y balizado propios de la L3
   - [ ] Transbordo con la L1 en Félix U. Gómez y con la L2 en Zaragoza
-- [ ] Otros trenes de Metrorrey: MM-90, MM-93 y los trenes nuevos de la L3
+- [ ] Otros trenes de Metrorrey: MM-90, MM-93, CRRC MM-20 – MM-25 y los trenes nuevos de la L3
 
 ### Curvas y recorrido real
 
@@ -253,6 +237,7 @@ Subtareas comunes a todas las líneas de la CDMX:
 - [ ] Sonidos (ambiente de estación, llegada del tren, cierre de puertas)
 - [ ] Horarios y frecuencias con reloj simulado (horas pico y valle)
 - [ ] Accesibilidad en el modelo: elevadores funcionando, pisos podotáctiles
+- [ ] Juego multijugador
 - [ ] Otros sistemas de México (Tren Suburbano, Tren Interurbano…) si la
       comunidad lo pide
 
@@ -262,11 +247,8 @@ Subtareas comunes a todas las líneas de la CDMX:
 errores, corregir textos, aportar fotos de referencia (con licencia
 compatible), modelar una estación o mejorar el código.
 
-- Lee la guía completa en [`CONTRIBUTING.md`](CONTRIBUTING.md).
-- Revisa las tareas abiertas en [`pendientes.md`](pendientes.md) y la
-  hoja de ruta de arriba.
-- Para participar pedimos seguir el
-  [`CODE_OF_CONDUCT.md`](CODE_OF_CONDUCT.md) (resumen: respeto y buena fe).
+- Guía: [`CONTRIBUTING.md`](CONTRIBUTING.md) · tareas abiertas: [`pendientes.md`](pendientes.md) y la hoja de ruta de arriba ·
+  convivencia: [`CODE_OF_CONDUCT.md`](CODE_OF_CONDUCT.md) · seguridad: [`SECURITY.md`](SECURITY.md).
 
 ## Licencia
 
